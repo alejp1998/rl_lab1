@@ -47,9 +47,9 @@ class MinotaurMaze:
     }
 
     # Reward values
-    STEP_REWARD = -1
+    STEP_REWARD = 0
     VICTORY_REWARD = 10
-    LOSS_REWARD = -100
+    LOSS_REWARD = -10000
 
 
     def __init__(self, maze):
@@ -130,6 +130,11 @@ class MinotaurMaze:
             Minotaur: moves to one of the adjacent cells (j_m+-1,i_m+-1) randomly
             :return int next_state: state (j_t,i_t,j_m,i_m) on the maze that agent transitions to.
         """
+
+        # If the current state is in VICTORY or LOSS subset
+        if self.subset[state] == -1 or self.subset[state] == 1 :
+            return state
+        
         # Current coords
         (i_t,j_t,i_m,j_m) = self.states[state] 
         
@@ -156,22 +161,27 @@ class MinotaurMaze:
 
         # Compute the transition probabilities.
         for s in range(self.n_states):
+            # Is the state terminal
+            is_terminal = self.subset[s] == -1 or self.subset[s] == 1
             # Current coords
             (i_t,j_t,i_m,j_m) = self.states[s]
             # Iterate through posible actions for Thomas
             for a in self.acts_thomas[(i_t,j_t)] :
-                # Compute the future position given current (state, action)
-                next_i_t = i_t + self.actions[a][0]
-                next_j_t = j_t + self.actions[a][1]
-                
-                # Iterate through posible minotaur actions
-                minotaur_actions = self.acts_minotaur[(i_m,j_m)]
-                for minotaur_action in minotaur_actions :
-                    next_i_m = i_m + self.actions[minotaur_action][0]
-                    next_j_m = j_m + self.actions[minotaur_action][1]
+                if is_terminal :
+                    transition_probabilities[s, s, a] = 1
+                else : 
+                    # Compute the future position given current (state, action)
+                    next_i_t = i_t + self.actions[a][0]
+                    next_j_t = j_t + self.actions[a][1]
+                    
+                    # Iterate through posible minotaur actions
+                    minotaur_actions = self.acts_minotaur[(i_m,j_m)]
+                    for minotaur_action in minotaur_actions :
+                        next_i_m = i_m + self.actions[minotaur_action][0]
+                        next_j_m = j_m + self.actions[minotaur_action][1]
 
-                    next_s = self.map[(next_i_t,next_j_t,next_i_m,next_j_m)]
-                    transition_probabilities[next_s, s, a] = 1/len(minotaur_actions)
+                        next_s = self.map[(next_i_t,next_j_t,next_i_m,next_j_m)]
+                        transition_probabilities[next_s, s, a] = 1/len(minotaur_actions)
 
         return transition_probabilities
 
@@ -183,6 +193,8 @@ class MinotaurMaze:
         rewards = np.zeros((self.n_states, self.n_actions))
 
         for s in range(self.n_states):
+            # Is the state terminal
+            is_terminal = self.subset[s] == -1 or self.subset[s] == 1
             # Current coords
             (i_t,j_t,i_m,j_m) = self.states[s]
             # Iterate through posible actions for Thomas
@@ -191,6 +203,11 @@ class MinotaurMaze:
                 next_i_t = i_t + self.actions[a][0]
                 next_j_t = j_t + self.actions[a][1]
 
+                # If we are already in a terminal state
+                if is_terminal : 
+                    rewards[s,a] = 0
+                    break
+
                 # Check all possible next states
                 minotaur_actions = self.acts_minotaur[(i_m,j_m)]
                 for minotaur_action in minotaur_actions :
@@ -198,6 +215,7 @@ class MinotaurMaze:
                     next_j_m = j_m + self.actions[minotaur_action][1]
 
                     next_s = self.map[(next_i_t,next_j_t,next_i_m,next_j_m)]
+
                     # If one of the states is inside LOSS subset
                     if self.subset[next_s] == -1 :
                         rewards[s,a] = self.LOSS_REWARD
@@ -225,7 +243,7 @@ class MinotaurMaze:
             s = self.map[start]
             # Add the starting position in the maze to the path
             path.append(start)
-            while t < horizon-1:
+            while t < horizon:
                 # Move to next state given the policy and the current state
                 next_s = self.__move(s,policy[s,t])
                 # Add the position in the maze corresponding to the next state
@@ -295,7 +313,6 @@ def dynamic_programming(env, horizon):
     return V, policy
 
 def draw_maze(maze):
-
     # Map a color to each cell in the maze
     col_map = {0: WHITE, 1: BLACK, 2: LIGHT_GREEN, -6: LIGHT_RED, -1: LIGHT_RED}
 
@@ -332,7 +349,6 @@ def draw_maze(maze):
         cell.set_width(1.0/cols)
 
 def animate_solution(maze, path):
-
     # Map a color to each cell in the maze
     col_map = {0: WHITE, 1: BLACK, 2: LIGHT_GREEN, -6: LIGHT_RED, -1: LIGHT_RED}
 
@@ -370,20 +386,37 @@ def animate_solution(maze, path):
 
     # Update the color at each frame
     for i in range(len(path)):
-        grid.get_celld()[(path[i][0:2])].set_facecolor(LIGHT_ORANGE)
-        grid.get_celld()[(path[i][0:2])].get_text().set_text('THOMAS')
-        if i > 0:
-            if path[i] == path[i-1]:
-                grid.get_celld()[(path[i][0:2])].set_facecolor(LIGHT_GREEN)
-                grid.get_celld()[(path[i][0:2])].get_text().set_text('Player is out')
-            else:
-                grid.get_celld()[(path[i-1][0:2])].set_facecolor(col_map[maze[path[i-1][0:2]]])
-                grid.get_celld()[(path[i-1][0:2])].get_text().set_text('')
-        
-        grid.get_celld()[(path[i][2:])].set_facecolor(LIGHT_PURPLE)
-        grid.get_celld()[(path[i][2:])].get_text().set_text('MINOTAUR')
-        grid.get_celld()[(path[i-1][2:])].set_facecolor(col_map[maze[path[i-1][2:]]])
-        grid.get_celld()[(path[i-1][2:])].get_text().set_text('')
+        # NORMAL EVOLUTION
+        if path[i][:2] != path[i][2:] :
+            # THOMAS CELLS
+            if maze[path[i][:2]] == 2 :
+                # VICTORY
+                grid.get_celld()[(path[i][:2])].set_facecolor(LIGHT_GREEN)
+                grid.get_celld()[(path[i][:2])].get_text().set_text('VICTORY')
+            else :
+                # IF SAFE
+                grid.get_celld()[(path[i][:2])].set_facecolor(LIGHT_ORANGE)
+                grid.get_celld()[(path[i][:2])].get_text().set_text('THOMAS')
+
+            # IF HAVE MOVED WE CLEAR PREVIOUS CELL  
+            if i > 0 and path[i][0:2] != path[i-1][:2]:
+                grid.get_celld()[(path[i-1][:2])].set_facecolor(col_map[maze[path[i-1][:2]]])
+                grid.get_celld()[(path[i-1][:2])].get_text().set_text('')
+            
+            # MINOTAUR CELLS
+            grid.get_celld()[(path[i][2:])].set_facecolor(LIGHT_PURPLE)
+            grid.get_celld()[(path[i][2:])].get_text().set_text('MINOTAUR')
+            # CLEAR PREV CELLS ONLY IF THOMAS HASNT MOVED THERE
+            if path[i][:2] != path[i-1][2:] and path[i][2:] != path[i-1][2:]:
+                grid.get_celld()[(path[i-1][2:])].set_facecolor(col_map[maze[path[i-1][2:]]])
+                grid.get_celld()[(path[i-1][2:])].get_text().set_text('')
+            
+            
+        # IF LOSS
+        elif path[i][:2] == path[i][2:] :
+            # GAME OVER
+            grid.get_celld()[(path[i][:2])].set_facecolor(LIGHT_RED)
+            grid.get_celld()[(path[i][:2])].get_text().set_text('GAME OVER')
 
         display.display(fig)
         display.clear_output(wait=True)
