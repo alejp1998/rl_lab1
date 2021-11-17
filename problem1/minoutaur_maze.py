@@ -18,7 +18,7 @@ import time
 from IPython import display
 
 # Implemented methods
-methods = ['DynProg']
+methods = ['DynProg', 'ValIter']
 
 # Some colours
 LIGHT_RED    = '#FFC4CC'
@@ -255,6 +255,7 @@ class MinotaurMaze:
             s = self.map[start]
             # Add the starting position in the maze to the path
             path.append(start)
+            # Probabilities of being caught for each policy action
             caught_probs = []
             while t < horizon :
                 # If we reached a terminal state
@@ -290,6 +291,52 @@ class MinotaurMaze:
                 victory_prob = 1
                 for caught_prob in caught_probs :
                     victory_prob = victory_prob*(1-caught_prob)
+
+        if method == 'ValIter':
+            # Initialize current state, next state and time
+            t = 1
+            s = self.map[start]
+            # Add the starting position in the maze to the path
+            path.append(start)
+            # Move to next state given the policy and the current state
+            next_s = self.__move(s,policy[s])
+            # Add the position in the maze corresponding to the next state
+            # to the path
+            path.append(self.states[next_s])
+            # Probabilities of being caught for each policy action
+            caught_probs = []
+            # Loop while state is not terminal (loss or victory)
+            while s != next_s:
+                # Update state
+                s = next_s
+
+                # Action to take according to policy
+                a = int(policy[s])
+                
+                # Prob. of being caught after taking action a in state s
+                (i_t,j_t,i_m,j_m) = self.states[s]
+                minotaur_actions = self.acts_minotaur[(i_m,j_m)]
+                if self.rewards[s,a] == self.LOSS_REWARD :
+                    caught_prob = 1/len(minotaur_actions)
+                else : 
+                    caught_prob = 0
+                caught_probs.append(caught_prob)
+
+                # Move to next state given the policy and the current state
+                next_s = self.__move(s,a)
+                # Add the position in the maze corresponding to the next state
+                # to the path
+                path.append(self.states[next_s])
+                # Update time and state for next iteration
+                t +=1
+            # Calculate victory prob
+            if self.subset[s] != 1 :
+                victory_prob = 0
+            else :
+                victory_prob = 1
+                for caught_prob in caught_probs :
+                    victory_prob = victory_prob*(1-caught_prob)
+
         return path, victory_prob
 
     def minotaur_cell_probs (self, maze, origin, horizon):
@@ -415,6 +462,62 @@ def dynamic_programming(env, horizon):
         V[:,t] = np.max(Q,1)
         # The optimal action is the one that maximizes the Q function
         policy[:,t] = np.argmax(Q,1)
+    return V, policy
+
+def value_iteration(env, gamma, epsilon):
+    """ Solves the shortest path problem using value iteration
+        :input Maze env           : The maze environment in which we seek to
+                                    find the shortest path.
+        :input float gamma        : The discount factor.
+        :input float epsilon      : accuracy of the value iteration procedure.
+        :return numpy.array V     : Optimal values for every state at every
+                                    time, dimension S*T
+        :return numpy.array policy: Optimal time-varying policy at every state,
+                                    dimension S*T
+    """
+    # The value itearation algorithm requires the knowledge of :
+    # - Transition probabilities
+    # - Rewards
+    # - State space
+    # - Action space
+    # - The finite horizon
+    p         = env.transition_probabilities
+    r         = env.rewards
+    n_states  = env.n_states
+    n_actions = env.n_actions
+
+    # Required variables and temporary ones for the VI to run
+    V   = np.zeros(n_states)
+    Q   = np.zeros((n_states, n_actions))
+    BV  = np.zeros(n_states)
+    # Iteration counter
+    n   = 0
+    # Tolerance error
+    tol = (1 - gamma)* epsilon/gamma
+
+    # Initialization of the VI
+    for s in range(n_states):
+        for a in range(n_actions):
+            Q[s, a] = r[s, a] + gamma*np.dot(p[:,s,a],V)
+    BV = np.max(Q, 1)
+
+    # Iterate until convergence
+    while np.linalg.norm(V - BV) >= tol and n < 200:
+        # Increment by one the numbers of iteration
+        n += 1
+        # Update the value function
+        V = np.copy(BV)
+        # Compute the new BV
+        for s in range(n_states):
+            for a in range(n_actions):
+                Q[s, a] = r[s, a] + gamma*np.dot(p[:,s,a],V)
+        BV = np.max(Q, 1)
+        # Show error
+        #print(np.linalg.norm(V - BV))
+
+    # Compute policy
+    policy = np.argmax(Q,1)
+    # Return the obtained policy
     return V, policy
 
 def draw_maze(maze):
