@@ -28,6 +28,10 @@ WHITE        = '#FFFFFF'
 LIGHT_PURPLE = '#E8D0FF'
 LIGHT_ORANGE = '#FAE0C3'
 
+# Prob of approaching/moving away
+P_MOVE_TOWARDS = 0.35
+P_MOVE_AWAY = 0.65
+
 class MinotaurMaze:
 
     # Actions
@@ -48,20 +52,21 @@ class MinotaurMaze:
 
     # Reward values
     STEP_REWARD = -1
+    KEY_REWARD = 50
     VICTORY_REWARD = 100
     LOSS_REWARD = -10000
     IMPOSSIBLE_REWARD = -np.Inf
 
 
-    def __init__(self, maze, minotaur_can_wait=False):
+    def __init__(self, maze, minotaur_can_wait = False, key_needed = False):
         """ Constructor of the environment Maze.
         """
         self.maze                                          = maze
-        self.states, self.subset, self.map                 = self.__states()
         self.actions, self.acts_thomas, self.acts_minotaur = self.__actions(minotaur_can_wait)
+        self.states, self.subset, self.map, self.acts_minotaur_approach, self.acts_minotaur_dist = self.__states(key_needed)
         self.n_actions                                     = len(self.actions)
         self.n_states                                      = len(self.states)
-        self.transition_probabilities                      = self.__transitions()
+        self.transition_probabilities                      = self.__transitions(key_needed)
         self.rewards                                       = self.__rewards()
 
     def __actions(self,minotaur_can_wait):
@@ -99,37 +104,62 @@ class MinotaurMaze:
                     
         return actions, acts_thomas, acts_minotaur
 
-    def __states(self):
+    def __states(self,key_needed):
         states = {}
         map = {} # mapping from coords to state identifier
         subset = {} # -1 if loss, 0 if safe, 1 if victorius
+        acts_minotaur_approach = {}
+        acts_minotaur_dist = {}
         
         s = 0
-        for i_m in range(self.maze.shape[0]):
-            for j_m in range(self.maze.shape[1]):
-                for i_t in range(self.maze.shape[0]):
-                    for j_t in range(self.maze.shape[1]):
-                        if self.maze[i_t,j_t] != 1:
-                            # Possible states
-                            states[s] = (i_t,j_t,i_m,j_m)
-                            map[(i_t,j_t,i_m,j_m)] = s
-                            
-                            # Victory states
-                            if (self.maze[i_t,j_t] == 2) and ((i_t,j_t) != (i_m,j_m)):
-                                subset[s] = 1
-                            # Loss states
-                            elif (i_t,j_t) == (i_m,j_m) :
-                                subset[s] = -1
-                            # Safe (non-victorius) states
-                            else :
-                                subset[s] = 0    
+        for key in [1,0] :
+            # Assume we already have the key when its not needed
+            if not key_needed and key == 0 :
+                break 
 
-                            # Increase by one state identifier
-                            s += 1    
+            for i_m in range(self.maze.shape[0]):
+                for j_m in range(self.maze.shape[1]):
+                    for i_t in range(self.maze.shape[0]):
+                        for j_t in range(self.maze.shape[1]):
+                            if self.maze[i_t,j_t] != 1:
+                                # Possible states
+                                states[s] = (i_t,j_t,i_m,j_m,key)
+                                map[(i_t,j_t,i_m,j_m,key)] = s
                                 
-        return states, subset, map
+                                # Victory states
+                                if (self.maze[i_t,j_t] == 2) and ((i_t,j_t) != (i_m,j_m)) and key == 1:
+                                    subset[s] = 1
+                                # Loss states
+                                elif (i_t,j_t) == (i_m,j_m) :
+                                    subset[s] = -1
+                                # Safe (non-victorius) states
+                                else :
+                                    subset[s] = 0    
 
-    def __move(self, state, action):
+                                # Approaching and distancing minotaur actions
+                                diff = (i_t-i_m, j_t-j_m)
+                                # Actions to approach Thomas
+                                acts_minotaur_approach[s] = []
+                                if diff[0] > 0 :
+                                    acts_minotaur_approach[s].append(self.MOVE_DOWN)
+                                elif diff[0] < 0 :
+                                    acts_minotaur_approach[s].append(self.MOVE_UP)
+                                if diff[1] > 0 :
+                                    acts_minotaur_approach[s].append(self.MOVE_RIGHT)
+                                elif diff[1] < 0 :
+                                    acts_minotaur_approach[s].append(self.MOVE_LEFT)
+                                # Actions to move away from Thomas
+                                acts_minotaur_dist[s] = []
+                                for act in self.acts_minotaur[(i_m,j_m)] :
+                                    if act not in acts_minotaur_approach[s] :
+                                        acts_minotaur_dist[s].append(act)
+
+                                # Increase by one state identifier
+                                s += 1
+                                
+        return states, subset, map, acts_minotaur_approach, acts_minotaur_dist
+
+    def __move(self, state, action, key_needed):
         """ Makes a step in the maze, given a current position and an action.
             Thomas: moves to position (j_t,i_t) determined by action
             Minotaur: moves to one of the adjacent cells (j_m+-1,i_m+-1) randomly
@@ -141,22 +171,36 @@ class MinotaurMaze:
             return state
         
         # Current coords
-        (i_t,j_t,i_m,j_m) = self.states[state] 
+        (i_t,j_t,i_m,j_m,key) = self.states[state] 
         
-        # Compute the future position given current (state, action)
+        # Compute the future position of Thomas given current (state, action)
         next_i_t = i_t + self.actions[action][0]
         next_j_t = j_t + self.actions[action][1]
 
-        # Compute next random minotaur position
-        minotaur_action = random.choice(self.acts_minotaur[(i_m,j_m)])
-        next_i_m = i_m + self.actions[minotaur_action][0]
-        next_j_m = j_m + self.actions[minotaur_action][1]
+        # If we are in the key position we pick it
+        if self.maze[next_i_t,next_j_t] == 3 :
+            key = 1
 
-        next_state = self.map[(next_i_t,next_j_t,next_i_m,next_j_m)]
+        # Compute next random minotaur action
+        if not key_needed :
+            minotaur_action = random.choice(self.acts_minotaur[(i_m,j_m)])
+        else :
+            # Next minotaur action
+            Na = len(self.acts_minotaur_approach[state]) if len(self.acts_minotaur_approach[state])>0 else 1
+            Nd = len(self.acts_minotaur_dist[state]) if len(self.acts_minotaur_dist[state])>0 else 1
+            possible_actions = self.acts_minotaur_approach[state]*int(P_MOVE_TOWARDS*100/Na) + self.acts_minotaur_dist[state]*int(P_MOVE_AWAY*100/Nd)
+            minotaur_action = random.choice(possible_actions)
+
+        # Compute next minotaur position
+        next_i_m = i_m + self.actions[minotaur_action][0]
+        next_j_m = j_m + self.actions[minotaur_action][1]    
+
+
+        next_state = self.map[(next_i_t,next_j_t,next_i_m,next_j_m,key)]
         
         return next_state
 
-    def __transitions(self):
+    def __transitions(self,key_needed):
         """ Computes the transition probabilities for every state action pair.
             :return numpy.tensor transition probabilities: tensor of transition
             probabilities of dimension S*S*A
@@ -170,7 +214,7 @@ class MinotaurMaze:
             # Is the state terminal
             is_terminal = self.subset[s] == -1 or self.subset[s] == 1
             # Current coords
-            (i_t,j_t,i_m,j_m) = self.states[s]
+            (i_t,j_t,i_m,j_m,key) = self.states[s]
             # Iterate through possible actions for Thomas
             for a in self.acts_thomas[(i_t,j_t)] :
                 if is_terminal :
@@ -181,14 +225,29 @@ class MinotaurMaze:
                 next_i_t = i_t + self.actions[a][0]
                 next_j_t = j_t + self.actions[a][1]
                 
+                # If we are in the key position we pick it
+                if self.maze[next_i_t,next_j_t] == 3 :
+                    key = 1
+
                 # Iterate through possible minotaur actions
                 minotaur_actions = self.acts_minotaur[(i_m,j_m)]
                 for minotaur_action in minotaur_actions :
                     next_i_m = i_m + self.actions[minotaur_action][0]
                     next_j_m = j_m + self.actions[minotaur_action][1]
-
-                    next_s = self.map[(next_i_t,next_j_t,next_i_m,next_j_m)]
-                    transition_probabilities[next_s, s, a] = 1/len(minotaur_actions)
+                    next_s = self.map[(next_i_t,next_j_t,next_i_m,next_j_m,key)]
+                    # Number of possible approaching/distancing actions
+                    Na = len(self.acts_minotaur_approach[s])
+                    Nd = len(self.acts_minotaur_dist[s])
+                    # Probability of each approaching/distancing action
+                    pa = P_MOVE_TOWARDS/Na if Nd > 0 else 1/Na
+                    pd = P_MOVE_AWAY/Nd if Nd > 0 else 0
+                    if not key_needed :
+                        transition_probabilities[next_s, s, a] = 1/len(minotaur_actions)
+                    else : 
+                        if minotaur_action in self.acts_minotaur_approach[s] :
+                            transition_probabilities[next_s, s, a] = pa
+                        else :
+                            transition_probabilities[next_s, s, a] = pd
 
         return transition_probabilities
 
@@ -203,7 +262,7 @@ class MinotaurMaze:
             # Is the state terminal
             is_terminal = self.subset[s] == -1 or self.subset[s] == 1
             # Current coords
-            (i_t,j_t,i_m,j_m) = self.states[s]
+            (i_t,j_t,i_m,j_m,key) = self.states[s]
             # Iterate through posible actions for Thomas
             for a in self.actions : 
                 # If the action is not available
@@ -225,7 +284,7 @@ class MinotaurMaze:
                     next_i_m = i_m + self.actions[minotaur_action][0]
                     next_j_m = j_m + self.actions[minotaur_action][1]
 
-                    next_s = self.map[(next_i_t,next_j_t,next_i_m,next_j_m)]
+                    next_s = self.map[(next_i_t,next_j_t,next_i_m,next_j_m,key)]
 
                     # If one of the states is inside LOSS subset
                     if self.subset[next_s] == -1 :
@@ -234,13 +293,16 @@ class MinotaurMaze:
                     # If one of the states is inside VICTORY subset
                     elif self.subset[next_s] == 1 :
                         rewards[s,a] = self.VICTORY_REWARD
+                    # If we'll end in the key position and we didn't have it before
+                    elif (self.maze[next_i_t,next_j_t] == 3) and key == 0 :
+                        rewards[s,a] = self.KEY_REWARD
                     # If one of the states is inside SAFE subset and none of the previous is inside VICTORY
                     elif (self.subset[next_s] == 0) and (rewards[s,a] != self.VICTORY_REWARD) :
                         rewards[s,a] = self.STEP_REWARD
 
         return rewards
         
-    def simulate(self, start, policy, method):
+    def simulate(self, start, policy, method, key_needed):
         if method not in methods:
             error = 'ERROR: the argument method must be in {}'.format(methods)
             raise NameError(error)
@@ -266,7 +328,7 @@ class MinotaurMaze:
                 a = int(policy[s,t])
                 
                 # Prob. of being caught after taking action a in state s
-                (i_t,j_t,i_m,j_m) = self.states[s]
+                (i_t,j_t,i_m,j_m,key) = self.states[s]
                 minotaur_actions = self.acts_minotaur[(i_m,j_m)]
                 if self.rewards[s,a] == self.LOSS_REWARD :
                     caught_prob = 1/len(minotaur_actions)
@@ -275,7 +337,7 @@ class MinotaurMaze:
                 caught_probs.append(caught_prob)
 
                 # Compute next state
-                next_s = self.__move(s,a)
+                next_s = self.__move(s,a,key_needed)
                 
                 # Add the position in the maze corresponding to the next state
                 # to the path
@@ -299,7 +361,7 @@ class MinotaurMaze:
             # Add the starting position in the maze to the path
             path.append(start)
             # Move to next state given the policy and the current state
-            next_s = self.__move(s,policy[s])
+            next_s = self.__move(s,policy[s],key_needed)
             # Add the position in the maze corresponding to the next state
             # to the path
             path.append(self.states[next_s])
@@ -314,7 +376,7 @@ class MinotaurMaze:
                 a = int(policy[s])
                 
                 # Prob. of being caught after taking action a in state s
-                (i_t,j_t,i_m,j_m) = self.states[s]
+                (i_t,j_t,i_m,j_m,key) = self.states[s]
                 minotaur_actions = self.acts_minotaur[(i_m,j_m)]
                 if self.rewards[s,a] == self.LOSS_REWARD :
                     caught_prob = 1/len(minotaur_actions)
@@ -323,7 +385,7 @@ class MinotaurMaze:
                 caught_probs.append(caught_prob)
 
                 # Move to next state given the policy and the current state
-                next_s = self.__move(s,a)
+                next_s = self.__move(s,a,key_needed)
                 # Add the position in the maze corresponding to the next state
                 # to the path
                 path.append(self.states[next_s])
@@ -387,7 +449,7 @@ class MinotaurMaze:
         '''
         caught_probs = []
         for t in range(len(path)-1) :
-            (i_t,j_t,i_m,j_m) = path[t]
+            (i_t,j_t,i_m,j_m,key) = path[t]
             # If the state already victorius
             if path[t][:2] == path[t-1][:2] and maze[(i_t,j_t)] == 2 :
                 caught_probs.append(0)
@@ -522,7 +584,7 @@ def value_iteration(env, gamma, epsilon):
 
 def draw_maze(maze):
     # Map a color to each cell in the maze
-    col_map = {0: WHITE, 1: BLACK, 2: LIGHT_GREEN, -6: LIGHT_RED, -1: LIGHT_RED}
+    col_map = {0: WHITE, 1: BLACK, 2: LIGHT_GREEN, 3: LIGHT_ORANGE,  -6: LIGHT_RED, -1: LIGHT_RED}
 
     # Give a color to each cell
     rows,cols    = maze.shape
@@ -558,7 +620,7 @@ def draw_maze(maze):
 
 def animate_solution(maze, path):
     # Map a color to each cell in the maze
-    col_map = {0: WHITE, 1: BLACK, 2: LIGHT_GREEN, -6: LIGHT_RED, -1: LIGHT_RED}
+    col_map = {0: WHITE, 1: BLACK, 2: LIGHT_GREEN, 3: LIGHT_ORANGE, -6: LIGHT_RED, -1: LIGHT_RED}
 
     # Size of the maze
     rows,cols = maze.shape
@@ -612,12 +674,12 @@ def animate_solution(maze, path):
                 grid.get_celld()[(path[i-1][:2])].get_text().set_text('')
             
             # MINOTAUR CELLS
-            grid.get_celld()[(path[i][2:])].set_facecolor(LIGHT_PURPLE)
-            grid.get_celld()[(path[i][2:])].get_text().set_text('MINOTAUR')
+            grid.get_celld()[(path[i][2:4])].set_facecolor(LIGHT_PURPLE)
+            grid.get_celld()[(path[i][2:4])].get_text().set_text('MINOTAUR')
             # CLEAR PREV CELLS ONLY IF THOMAS HASNT MOVED THERE
-            if path[i][:2] != path[i-1][2:] and path[i][2:] != path[i-1][2:]:
-                grid.get_celld()[(path[i-1][2:])].set_facecolor(col_map[maze[path[i-1][2:]]])
-                grid.get_celld()[(path[i-1][2:])].get_text().set_text('')
+            if path[i][:2] != path[i-1][2:4] and path[i][2:4] != path[i-1][2:4]:
+                grid.get_celld()[(path[i-1][2:4])].set_facecolor(col_map[maze[path[i-1][2:4]]])
+                grid.get_celld()[(path[i-1][2:4])].get_text().set_text('')
                 
         # IF LOSS
         else :
