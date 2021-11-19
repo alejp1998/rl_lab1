@@ -73,17 +73,18 @@ class MinotaurMaze:
 
 
     def __init__(self, maze, minotaur_can_wait = False, key_needed = False):
-        """ Constructor of the environment Maze.
-        """
+        """ Constructor of the environment Maze."""
         self.maze                                          = maze
-        self.actions, self.acts_thomas, self.acts_minotaur = self.__actions(minotaur_can_wait)
-        self.states, self.subset, self.map, self.acts_minotaur_approach, self.acts_minotaur_dist = self.__states(key_needed)
+        self.key_needed                                    = key_needed
+        self.minotaur_can_wait                             = minotaur_can_wait
+        self.actions, self.acts_thomas, self.acts_minotaur = self.__actions()
+        self.states, self.subset, self.mapping, self.acts_minotaur_approach, self.acts_minotaur_dist = self.__states()
         self.n_actions                                     = len(self.actions)
         self.n_states                                      = len(self.states)
-        self.transition_probabilities                      = self.__transitions(key_needed)
+        self.transition_probabilities                      = self.__transitions()
         self.rewards                                       = self.__rewards()
 
-    def __actions(self,minotaur_can_wait):
+    def __actions(self):
         actions = {}
         acts_thomas = {} # possible set of actions for each cell
         acts_minotaur = {} # possible set of actions for each cell
@@ -111,16 +112,16 @@ class MinotaurMaze:
                         acts_thomas[i,j].append(a)
 
                     if not outside_limits :
-                        if minotaur_can_wait :
+                        if self.minotaur_can_wait :
                             acts_minotaur[i,j].append(a)
                         elif a != self.WAIT :
                             acts_minotaur[i,j].append(a)
                     
         return actions, acts_thomas, acts_minotaur
 
-    def __states(self,key_needed):
+    def __states(self):
         states = {}
-        map = {} # mapping from coords to state identifier
+        mapping = {} # mapping from coords to state identifier
         subset = {} # -1 if loss, 0 if safe, 1 if victorius
         acts_minotaur_approach = {}
         acts_minotaur_dist = {}
@@ -128,7 +129,7 @@ class MinotaurMaze:
         s = 0
         for key in [1,0] :
             # Assume we already have the key when its not needed
-            if not key_needed and key == 0 :
+            if not self.key_needed and key == 0 :
                 break 
 
             for i_m in range(self.maze.shape[0]):
@@ -138,7 +139,7 @@ class MinotaurMaze:
                             if self.maze[i_t,j_t] != 1:
                                 # Possible states
                                 states[s] = (i_t,j_t,i_m,j_m,key)
-                                map[(i_t,j_t,i_m,j_m,key)] = s
+                                mapping[(i_t,j_t,i_m,j_m,key)] = s
                                 
                                 # Victory states
                                 if (self.maze[i_t,j_t] == 2) and ((i_t,j_t) != (i_m,j_m)) and key == 1:
@@ -171,50 +172,9 @@ class MinotaurMaze:
                                 # Increase by one state identifier
                                 s += 1
                                 
-        return states, subset, map, acts_minotaur_approach, acts_minotaur_dist
+        return states, subset, mapping, acts_minotaur_approach, acts_minotaur_dist
 
-    def __move(self, state, action, key_needed):
-        """ Makes a step in the maze, given a current position and an action.
-            Thomas: moves to position (j_t,i_t) determined by action
-            Minotaur: moves to one of the adjacent cells (j_m+-1,i_m+-1) randomly
-            :return int next_state: state (j_t,i_t,j_m,i_m) on the maze that agent transitions to.
-        """
-
-        # If the current state is in VICTORY or LOSS subset
-        if self.subset[state] == -1 or self.subset[state] == 1 :
-            return state
-        
-        # Current coords
-        (i_t,j_t,i_m,j_m,key) = self.states[state] 
-        
-        # Compute the future position of Thomas given current (state, action)
-        next_i_t = i_t + self.actions[action][0]
-        next_j_t = j_t + self.actions[action][1]
-
-        # If we are in the key position we pick it
-        if self.maze[next_i_t,next_j_t] == 3 :
-            key = 1
-
-        # Compute next random minotaur action
-        if not key_needed :
-            minotaur_action = random.choice(self.acts_minotaur[(i_m,j_m)])
-        else :
-            # Next minotaur action
-            Na = len(self.acts_minotaur_approach[state]) if len(self.acts_minotaur_approach[state])>0 else 1
-            Nd = len(self.acts_minotaur_dist[state]) if len(self.acts_minotaur_dist[state])>0 else 1
-            possible_actions = self.acts_minotaur_approach[state]*int(self.P_MOVE_TOWARDS*100/Na) + self.acts_minotaur_dist[state]*int(self.P_MOVE_AWAY*100/Nd)
-            minotaur_action = random.choice(possible_actions)
-
-        # Compute next minotaur position
-        next_i_m = i_m + self.actions[minotaur_action][0]
-        next_j_m = j_m + self.actions[minotaur_action][1]    
-
-
-        next_state = self.map[(next_i_t,next_j_t,next_i_m,next_j_m,key)]
-        
-        return next_state
-
-    def __transitions(self,key_needed):
+    def __transitions(self):
         """ Computes the transition probabilities for every state action pair.
             :return numpy.tensor transition probabilities: tensor of transition
             probabilities of dimension S*S*A
@@ -248,14 +208,14 @@ class MinotaurMaze:
                 for minotaur_action in minotaur_actions :
                     next_i_m = i_m + self.actions[minotaur_action][0]
                     next_j_m = j_m + self.actions[minotaur_action][1]
-                    next_s = self.map[(next_i_t,next_j_t,next_i_m,next_j_m,key)]
+                    next_s = self.mapping[(next_i_t,next_j_t,next_i_m,next_j_m,key)]
                     # Number of possible approaching/distancing actions
                     Na = len(self.acts_minotaur_approach[s])
                     Nd = len(self.acts_minotaur_dist[s])
                     # Probability of each approaching/distancing action
                     pa = self.P_MOVE_TOWARDS/Na if Nd > 0 else 1/Na
                     pd = self.P_MOVE_AWAY/Nd if Nd > 0 else 0
-                    if not key_needed :
+                    if not self.key_needed :
                         transition_probabilities[next_s, s, a] = 1/len(minotaur_actions)
                     else : 
                         if minotaur_action in self.acts_minotaur_approach[s] :
@@ -298,7 +258,7 @@ class MinotaurMaze:
                     next_i_m = i_m + self.actions[minotaur_action][0]
                     next_j_m = j_m + self.actions[minotaur_action][1]
 
-                    next_s = self.map[(next_i_t,next_j_t,next_i_m,next_j_m,key)]
+                    next_s = self.mapping[(next_i_t,next_j_t,next_i_m,next_j_m,key)]
 
                     # If one of the states is inside LOSS subset
                     if self.subset[next_s] == -1 :
@@ -315,8 +275,51 @@ class MinotaurMaze:
                         rewards[s,a] = self.STEP_REWARD
 
         return rewards
+
+    def move(self, state, action):
+        """ Makes a step in the maze, given a current position and an action.
+            Thomas: moves to position (j_t,i_t) determined by action
+            Minotaur: moves to one of the adjacent cells (j_m+-1,i_m+-1) randomly
+            :return int next_state: state (j_t,i_t,j_m,i_m) on the maze that agent transitions to.
+        """
+
+        # If the current state is in VICTORY or LOSS subset
+        if self.subset[state] == -1 or self.subset[state] == 1 :
+            return state
         
-    def simulate(self, start, policy, method, key_needed):
+        # Current coords
+        (i_t,j_t,i_m,j_m,key) = self.states[state] 
+        
+        # Compute the future position of Thomas given current (state, action)
+        next_i_t = i_t + self.actions[action][0]
+        next_j_t = j_t + self.actions[action][1]
+
+        # If we are in the key position we pick it
+        if self.maze[next_i_t,next_j_t] == 3 :
+            key = 1
+
+        # Compute next random minotaur action
+        if not self.key_needed :
+            minotaur_action = random.choice(self.acts_minotaur[(i_m,j_m)])
+        else :
+            # We sample a float from uniform distribution
+            if np.random.uniform(0,1) < self.P_MOVE_TOWARDS or len(self.acts_minotaur_dist[state]) == 0:
+                # If it's lower than P_MOVE_TOWARDS we approach
+                minotaur_action = random.choice(self.acts_minotaur_approach[state])
+            else:
+                # If it's higher we move away
+                minotaur_action = random.choice(self.acts_minotaur_dist[state])
+
+        # Compute next minotaur position
+        next_i_m = i_m + self.actions[minotaur_action][0]
+        next_j_m = j_m + self.actions[minotaur_action][1]    
+
+
+        next_state = self.mapping[(next_i_t,next_j_t,next_i_m,next_j_m,key)]
+        
+        return next_state
+        
+    def simulate(self, start, policy, method):
         if method not in methods:
             error = 'ERROR: the argument method must be in {}'.format(methods)
             raise NameError(error)
@@ -328,7 +331,7 @@ class MinotaurMaze:
             horizon = policy.shape[1]
             # Initialize current state and time
             t = 0
-            s = self.map[start]
+            s = self.mapping[start]
             # Add the starting position in the maze to the path
             path.append(start)
             # Probabilities of being caught for each policy action
@@ -351,7 +354,7 @@ class MinotaurMaze:
                 caught_probs.append(caught_prob)
 
                 # Compute next state
-                next_s = self.__move(s,a,key_needed)
+                next_s = self.move(s,a)
                 
                 # Add the position in the maze corresponding to the next state
                 # to the path
@@ -371,11 +374,11 @@ class MinotaurMaze:
         if method == 'ValIter':
             # Initialize current state, next state and time
             t = 1
-            s = self.map[start]
+            s = self.mapping[start]
             # Add the starting position in the maze to the path
             path.append(start)
             # Move to next state given the policy and the current state
-            next_s = self.__move(s,policy[s],key_needed)
+            next_s = self.move(s,policy[s])
             # Add the position in the maze corresponding to the next state
             # to the path
             path.append(self.states[next_s])
@@ -399,7 +402,7 @@ class MinotaurMaze:
                 caught_probs.append(caught_prob)
 
                 # Move to next state given the policy and the current state
-                next_s = self.__move(s,a,key_needed)
+                next_s = self.move(s,a)
                 # Add the position in the maze corresponding to the next state
                 # to the path
                 path.append(self.states[next_s])
@@ -489,12 +492,12 @@ class MinotaurMaze:
         print('The actions are:')
         print(self.actions)
         print('The mapping of the states:')
-        print(self.map)
+        print(self.mapping)
         print('The rewards:')
         print(self.rewards)
 
 def dynamic_programming(env, horizon):
-    """ Solves the shortest path problem using dynamic programming
+    """ Finds solution (optimal policy) using dynamic programming
         :input Maze env           : The maze environment in which we seek to
                                     find the shortest path.
         :input int horizon        : The time T up to which we solve the problem.
@@ -541,7 +544,7 @@ def dynamic_programming(env, horizon):
     return V, policy
 
 def value_iteration(env, gamma, epsilon):
-    """ Solves the shortest path problem using value iteration
+    """ Finds solution (optimal policy) using value iteration
         :input Maze env           : The maze environment in which we seek to
                                     find the shortest path.
         :input float gamma        : The discount factor.
@@ -595,6 +598,84 @@ def value_iteration(env, gamma, epsilon):
     policy = np.argmax(Q,1)
     # Return the obtained policy
     return V, policy
+
+def qLearning(env, start, lr, gamma, epsilon, n_episodes=10000, max_iters=100, exp_decreasing_decay=0) :
+    """ Finds solution using Q-learning
+        :input Maze env           : The maze environment in which we seek to
+                                    find the shortest path.
+        :input float lr           : The learning rate.
+        :input float gamma        : The discount factor.
+        :input float epsilon      : Prob. of selection an action uniformly at random at each step.
+        :input int n_episodes     : # of episodes to simulate.
+        :input int max_iters      : max. # of steps of each episode.
+        :input float exp_decreasing_decay  : rate at which exploration prob. will decay.
+        
+        :return numpy.array V     : Optimal values for every state at every
+                                    time, dimension S*T
+        :return numpy.array policy: Optimal time-varying policy at every state,
+                                    dimension S*T
+    """
+    # Minimum epsilon (min exploration prob)
+    epsilon_min = 0.01
+
+    # Reward collected in each episode
+    episodes_tot_reward = []
+
+    # The value itearation algorithm requires the knowledge of :
+    # - State space
+    # - Action space
+    p         = env.transition_probabilities
+    r         = env.rewards
+    n_states  = env.n_states
+    n_actions = env.n_actions
+
+    # Initialize the Q-table to 0
+    Q = np.zeros((n_states,n_actions))
+
+    # Iteration over episodes
+    for e in range(n_episodes):
+        # Initialize to starting state
+        s = env.mapping[start]
+        (i_t,j_t,i_m,j_m,key) = env.states[s]
+        is_terminal = False
+        
+        # Sum the rewards the agent collects from the environment
+        tot_episode_reward = 0
+        
+        # For each step in the episode
+        for i in range(max_iters):
+            # We sample a float from uniform distribution
+            if np.random.uniform(0,1) < epsilon:
+                # If it's lower than epsilon, we select random action (EXPLORE)
+                a = random.choice(env.acts_thomas[(i_t,j_t)])
+            else:
+                # If it's higher we take best action we have learned so far (EXPLOIT)
+                a = np.argmax(Q[s,:])
+                # If the action is not possible just take a different one randomly
+                if a not in env.acts_thomas[(i_t,j_t)]:
+                    a = random.choice(env.acts_thomas[(i_t,j_t)])
+            
+            # We take the action in the environment 
+            next_s = env.move(s,a)
+
+            # Are we already in a terminal state?
+            is_terminal = env.subset[next_s] == -1 or env.subset[next_s] == 1
+            
+            # We update our Q-table using the Q-learning iteration
+            Q[s, a] = (1-lr)*Q[s, a] + lr*(r[s,a] + gamma*max(Q[next_s,:]))
+            tot_episode_reward += r[s,a]
+
+            # If the episode is finished, we leave the for loop
+            if is_terminal :
+                break
+            # Update next state
+            s = next_s
+        
+        # Update epsilon according to exponential decay formula
+        epsilon = max(epsilon_min, np.exp(-exp_decreasing_decay*e))
+        episodes_tot_reward.append(tot_episode_reward)
+    
+    return Q, episodes_tot_reward
 
 def draw_maze(maze):
     # Size of the maze
