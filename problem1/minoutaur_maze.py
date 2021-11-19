@@ -28,12 +28,22 @@ WHITE        = '#FFFFFF'
 LIGHT_PURPLE = '#E8D0FF'
 LIGHT_ORANGE = '#FAE0C3'
 
-# Prob of approaching/moving away
-P_MOVE_TOWARDS = 0.35
-P_MOVE_AWAY = 0.65
+# Map a color to each cell in the maze
+col_map = {
+    0: WHITE, 
+    1: BLACK, 
+    2: LIGHT_GREEN, 
+    3: LIGHT_PURPLE
+}
+# Map a name to each cell
+text_map = {
+    0: '', 
+    1: '', 
+    2: 'EXIT', 
+    3: 'KEY'
+}
 
 class MinotaurMaze:
-
     # Actions
     WAIT       = 0
     MOVE_LEFT  = 1
@@ -49,6 +59,10 @@ class MinotaurMaze:
         MOVE_UP: "move up",
         MOVE_DOWN: "move down"
     }
+
+    # Prob of approaching/moving away
+    P_MOVE_TOWARDS = 0.35
+    P_MOVE_AWAY = 0.65
 
     # Reward values
     STEP_REWARD = -1
@@ -188,7 +202,7 @@ class MinotaurMaze:
             # Next minotaur action
             Na = len(self.acts_minotaur_approach[state]) if len(self.acts_minotaur_approach[state])>0 else 1
             Nd = len(self.acts_minotaur_dist[state]) if len(self.acts_minotaur_dist[state])>0 else 1
-            possible_actions = self.acts_minotaur_approach[state]*int(P_MOVE_TOWARDS*100/Na) + self.acts_minotaur_dist[state]*int(P_MOVE_AWAY*100/Nd)
+            possible_actions = self.acts_minotaur_approach[state]*int(self.P_MOVE_TOWARDS*100/Na) + self.acts_minotaur_dist[state]*int(self.P_MOVE_AWAY*100/Nd)
             minotaur_action = random.choice(possible_actions)
 
         # Compute next minotaur position
@@ -239,8 +253,8 @@ class MinotaurMaze:
                     Na = len(self.acts_minotaur_approach[s])
                     Nd = len(self.acts_minotaur_dist[s])
                     # Probability of each approaching/distancing action
-                    pa = P_MOVE_TOWARDS/Na if Nd > 0 else 1/Na
-                    pd = P_MOVE_AWAY/Nd if Nd > 0 else 0
+                    pa = self.P_MOVE_TOWARDS/Na if Nd > 0 else 1/Na
+                    pd = self.P_MOVE_AWAY/Nd if Nd > 0 else 0
                     if not key_needed :
                         transition_probabilities[next_s, s, a] = 1/len(minotaur_actions)
                     else : 
@@ -583,12 +597,13 @@ def value_iteration(env, gamma, epsilon):
     return V, policy
 
 def draw_maze(maze):
-    # Map a color to each cell in the maze
-    col_map = {0: WHITE, 1: BLACK, 2: LIGHT_GREEN, 3: LIGHT_ORANGE,  -6: LIGHT_RED, -1: LIGHT_RED}
+    # Size of the maze
+    rows,cols    = maze.shape
 
     # Give a color to each cell
-    rows,cols    = maze.shape
     colored_maze = [[col_map[maze[j,i]] for i in range(cols)] for j in range(rows)]
+    # Give a name to each cell
+    texted_maze = [[text_map[maze[j,i]] for i in range(cols)] for j in range(rows)]
 
     # Create figure of the size of the maze
     fig = plt.figure(1, figsize=(cols,rows))
@@ -599,29 +614,44 @@ def draw_maze(maze):
     ax.set_xticks([])
     ax.set_yticks([])
 
-    # Give a color to each cell
-    rows,cols    = maze.shape
-    colored_maze = [[col_map[maze[j,i]] for i in range(cols)] for j in range(rows)]
-
     # Create figure of the size of the maze
     fig = plt.figure(1, figsize=(cols,rows))
 
     # Create a table to color
-    grid = plt.table(cellText=None,
-                            cellColours=colored_maze,
-                            cellLoc='center',
-                            loc=(0,0),
-                            edges='closed')
+    grid = plt.table(
+        cellText=texted_maze,
+        cellColours=colored_maze,
+        cellLoc='center',
+        loc=(0,0),
+        edges='closed'
+    )
+
     # Modify the hight and width of the cells in the table
     tc = grid.properties()['children']
     for cell in tc:
         cell.set_height(1.0/rows)
         cell.set_width(1.0/cols)
 
-def animate_solution(maze, path):
-    # Map a color to each cell in the maze
-    col_map = {0: WHITE, 1: BLACK, 2: LIGHT_GREEN, 3: LIGHT_ORANGE, -6: LIGHT_RED, -1: LIGHT_RED}
+def compute_arrow (maze, current_cell, next_cell) :
+    # Size of the maze
+    rows,cols = maze.shape
 
+    # Cells height and width
+    h = 1.0/rows
+    w = 1.0/cols
+
+    # Compute cells difference
+    diff = (next_cell[0]-current_cell[0],next_cell[1]-current_cell[1])
+
+    # Arrow characteristics
+    x_st = w*current_cell[1] + w/2
+    y_st = abs(1 - h*current_cell[0] - h/2)
+    x_size = 0.8*(diff[1]*w/2)
+    y_size = 0.8*(-diff[0]*h/2)
+    
+    return x_st, y_st, x_size, y_size
+
+def animate_solution(maze, path, show_arrows=False, fps=1):
     # Size of the maze
     rows,cols = maze.shape
 
@@ -636,17 +666,21 @@ def animate_solution(maze, path):
 
     # Give a color to each cell
     colored_maze = [[col_map[maze[j,i]] for i in range(cols)] for j in range(rows)]
+    # Give a name to each cell
+    texted_maze = [[text_map[maze[j,i]] for i in range(cols)] for j in range(rows)]
 
     # Create figure of the size of the maze
     fig = plt.figure(1, figsize=(cols,rows))
 
     # Create a table to color
-    grid = plt.table(cellText=None,
-                     cellColours=colored_maze,
-                     cellLoc='center',
-                     loc=(0,0),
-                     edges='closed')
-
+    grid = plt.table(
+        cellText=texted_maze,
+        cellColours=colored_maze,
+        cellLoc='center',
+        loc=(0,0),
+        edges='closed'
+    )
+    
     # Modify the hight and width of the cells in the table
     tc = grid.properties()['children']
     for cell in tc:
@@ -655,9 +689,19 @@ def animate_solution(maze, path):
 
 
     # Update the color at each frame
+    key_taken = False
     for i in range(len(path)):
         # NORMAL EVOLUTION
         if path[i][:2] != path[i][2:] :
+            # REMOVE COLOR FROM KEY CELL IF WE TAKE IT
+            if path[i-1][4] == 0 and path[i][4] == 1 :
+                keys_cell = path[i][:2]
+                key_taken = True
+            if key_taken : 
+                grid.get_celld()[(keys_cell)].set_facecolor(WHITE)
+                grid.get_celld()[(keys_cell)].get_text().set_text('')
+            
+
             # THOMAS CELLS
             if maze[path[i][:2]] == 2 :
                 # VICTORY
@@ -668,18 +712,31 @@ def animate_solution(maze, path):
                 grid.get_celld()[(path[i][:2])].set_facecolor(LIGHT_ORANGE)
                 grid.get_celld()[(path[i][:2])].get_text().set_text('THOMAS')
 
+            # THOMAS ARROWS 
+            if show_arrows and i < len(path)-1:
+                x_st, y_st, x_size, y_size = compute_arrow(maze,path[i][:2],path[i+1][:2])
+                plt.arrow(x_st, y_st, x_size, y_size,width=0.002,color ='orange')
+                plt.text(x_st+x_size/2,y_st+y_size/2,str(i),fontsize=14,color='orange')
+
+
             # IF HAVE MOVED WE CLEAR PREVIOUS CELL  
             if i > 0 and path[i][0:2] != path[i-1][:2]:
                 grid.get_celld()[(path[i-1][:2])].set_facecolor(col_map[maze[path[i-1][:2]]])
                 grid.get_celld()[(path[i-1][:2])].get_text().set_text('')
             
             # MINOTAUR CELLS
-            grid.get_celld()[(path[i][2:4])].set_facecolor(LIGHT_PURPLE)
+            grid.get_celld()[(path[i][2:4])].set_facecolor(LIGHT_RED)
             grid.get_celld()[(path[i][2:4])].get_text().set_text('MINOTAUR')
             # CLEAR PREV CELLS ONLY IF THOMAS HASNT MOVED THERE
             if path[i][:2] != path[i-1][2:4] and path[i][2:4] != path[i-1][2:4]:
                 grid.get_celld()[(path[i-1][2:4])].set_facecolor(col_map[maze[path[i-1][2:4]]])
                 grid.get_celld()[(path[i-1][2:4])].get_text().set_text('')
+
+            # MINOTAUR ARROWS 
+            if show_arrows and i < len(path)-1:
+                x_st, y_st, x_size, y_size = compute_arrow(maze,path[i][2:4],path[i+1][2:4])
+                plt.arrow(x_st, y_st, x_size, y_size,width=0.002,color ='red')
+                plt.text(x_st+x_size/2,y_st+y_size/2,str(i),fontsize=14,color='red')
                 
         # IF LOSS
         else :
@@ -689,4 +746,4 @@ def animate_solution(maze, path):
 
         display.display(fig)
         display.clear_output(wait=True)
-        time.sleep(0.25)
+        time.sleep(1/fps)
