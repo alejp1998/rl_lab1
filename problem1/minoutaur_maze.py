@@ -18,7 +18,7 @@ import time
 from IPython import display
 
 # Implemented methods
-methods = ['DynProg', 'ValIter']
+methods = ['DynProg', 'ValIter', 'Q-Learning', 'SARSA']
 
 # Some colours
 LIGHT_RED    = '#FFC4CC'
@@ -326,7 +326,7 @@ class MinotaurMaze:
 
         path = list()
         victory_prob = 1
-        if method == 'DynProg':
+        if method == methods[0]:
             # Deduce the horizon from the policy shape
             horizon = policy.shape[1]
             # Initialize current state and time
@@ -371,7 +371,7 @@ class MinotaurMaze:
                 for caught_prob in caught_probs :
                     victory_prob = victory_prob*(1-caught_prob)
 
-        if method == 'ValIter':
+        if method in methods[1:] :
             # Initialize current state, next state and time
             t = 1
             s = self.mapping[start]
@@ -549,10 +549,9 @@ def value_iteration(env, gamma, epsilon):
                                     find the shortest path.
         :input float gamma        : The discount factor.
         :input float epsilon      : accuracy of the value iteration procedure.
-        :return numpy.array V     : Optimal values for every state at every
-                                    time, dimension S*T
+        :return numpy.array V     : Optimal values for every state, dimension S
         :return numpy.array policy: Optimal time-varying policy at every state,
-                                    dimension S*T
+                                    dimension S
     """
     # The value itearation algorithm requires the knowledge of :
     # - Transition probabilities
@@ -599,11 +598,10 @@ def value_iteration(env, gamma, epsilon):
     # Return the obtained policy
     return V, policy
 
-def qLearning(env, start, lr, gamma, epsilon, n_episodes=10000, max_iters=100, exp_decreasing_decay=0) :
+def qLearning(env, start, gamma, epsilon, n_episodes=10000, max_iters=100, exp_decreasing_decay=0, lr_alpha = 2/3) :
     """ Finds solution using Q-learning
         :input Maze env           : The maze environment in which we seek to
                                     find the shortest path.
-        :input float lr           : The learning rate.
         :input float gamma        : The discount factor.
         :input float epsilon      : Prob. of selection an action uniformly at random at each step.
         :input int n_episodes     : # of episodes to simulate.
@@ -613,13 +611,13 @@ def qLearning(env, start, lr, gamma, epsilon, n_episodes=10000, max_iters=100, e
         :return numpy.array V     : Optimal values for every state at every
                                     time, dimension S*T
         :return numpy.array policy: Optimal time-varying policy at every state,
-                                    dimension S*T
+                                    dimension S
     """
     # Minimum epsilon (min exploration prob)
     epsilon_min = 0.01
 
     # Reward collected in each episode
-    episodes_tot_reward = []
+    init_Vs = []
 
     # The value itearation algorithm requires the knowledge of :
     # - State space
@@ -632,6 +630,9 @@ def qLearning(env, start, lr, gamma, epsilon, n_episodes=10000, max_iters=100, e
     # Initialize the Q-table to 0
     Q = np.zeros((n_states,n_actions))
 
+    # Initialize # table of numbers of visits
+    n = np.zeros((n_states,n_actions))
+
     # Iteration over episodes
     for e in range(n_episodes):
         # Initialize to starting state
@@ -639,22 +640,21 @@ def qLearning(env, start, lr, gamma, epsilon, n_episodes=10000, max_iters=100, e
         (i_t,j_t,i_m,j_m,key) = env.states[s]
         is_terminal = False
         
-        # Sum the rewards the agent collects from the environment
-        tot_episode_reward = 0
-        
         # For each step in the episode
         for i in range(max_iters):
             # We sample a float from uniform distribution
-            if np.random.uniform(0,1) < epsilon:
+            explore = np.random.uniform(0,1) < epsilon
+            if explore:
                 # If it's lower than epsilon, we select random action (EXPLORE)
                 a = random.choice(env.acts_thomas[(i_t,j_t)])
             else:
                 # If it's higher we take best action we have learned so far (EXPLOIT)
-                a = np.argmax(Q[s,:])
-                # If the action is not possible just take a different one randomly
-                if a not in env.acts_thomas[(i_t,j_t)]:
-                    a = random.choice(env.acts_thomas[(i_t,j_t)])
-            
+                a_ind = np.argmax(Q[s,env.acts_thomas[(i_t,j_t)]])
+                a = env.acts_thomas[(i_t,j_t)][a_ind]
+
+            # Increment # of visits of pair [s,a]
+            n[s,a] += 1
+
             # We take the action in the environment 
             next_s = env.move(s,a)
 
@@ -662,20 +662,133 @@ def qLearning(env, start, lr, gamma, epsilon, n_episodes=10000, max_iters=100, e
             is_terminal = env.subset[next_s] == -1 or env.subset[next_s] == 1
             
             # We update our Q-table using the Q-learning iteration
-            Q[s, a] = (1-lr)*Q[s, a] + lr*(r[s,a] + gamma*max(Q[next_s,:]))
-            tot_episode_reward += r[s,a]
+            lr = 1/(n[s,a]**lr_alpha)
+            Q[s,a] = (1-lr)*Q[s,a] + lr*(r[s,a] + gamma*max(Q[next_s,:]))
 
             # If the episode is finished, we leave the for loop
             if is_terminal :
                 break
+
             # Update next state
             s = next_s
+            (i_t,j_t,i_m,j_m,key) = env.states[s]
         
+        # Value function of the initial state
+        init_V = max(Q[env.mapping[start],env.acts_thomas[(start[0],start[1])]])
+
         # Update epsilon according to exponential decay formula
         epsilon = max(epsilon_min, np.exp(-exp_decreasing_decay*e))
-        episodes_tot_reward.append(tot_episode_reward)
+        init_Vs.append(init_V)
+
+    # Compute optimal policy with what we have learned
+    policy = []
+    for s in range(n_states) :
+        (i_t,j_t,i_m,j_m,key) = env.states[s]
+        a_ind = np.argmax(Q[s,env.acts_thomas[(i_t,j_t)]])
+        a = env.acts_thomas[(i_t,j_t)][a_ind]
+        policy.append(a)
     
-    return Q, episodes_tot_reward
+    return Q, policy, init_Vs
+
+def sarsa(env, start, gamma, epsilon, n_episodes=10000, max_iters=100, exp_decreasing_decay=0, lr_alpha = 2/3) :
+    """ Finds solution using SARSA
+        :input Maze env           : The maze environment in which we seek to
+                                    find the shortest path.
+        :input float gamma        : The discount factor.
+        :input float epsilon      : Prob. of selection an action uniformly at random at each step.
+        :input int n_episodes     : # of episodes to simulate.
+        :input int max_iters      : max. # of steps of each episode.
+        :input float exp_decreasing_decay  : rate at which exploration prob. will decay.
+        
+        :return numpy.array V     : Optimal values for every state at every
+                                    time, dimension S*T
+        :return numpy.array policy: Optimal time-varying policy at every state,
+                                    dimension S
+    """
+    # Choose next action based on Thomas position
+    def choose_action(s) :
+        (i_t,j_t,i_m,j_m,key) = env.states[s]
+        # We sample a float from uniform distribution
+        explore = np.random.uniform(0,1) < epsilon
+        if explore:
+            # If it's lower than epsilon, we select random action (EXPLORE)
+            a = random.choice(env.acts_thomas[(i_t,j_t)])
+        else:
+            # If it's higher we take best action we have learned so far (EXPLOIT)
+            a_ind = np.argmax(Q[s,env.acts_thomas[(i_t,j_t)]])
+            a = env.acts_thomas[(i_t,j_t)][a_ind]
+        return a
+
+    # Minimum epsilon (min exploration prob)
+    epsilon_min = 0.01
+
+    # Reward collected in each episode
+    init_Vs = []
+
+    # The value itearation algorithm requires the knowledge of :
+    # - State space
+    # - Action space
+    p         = env.transition_probabilities
+    r         = env.rewards
+    n_states  = env.n_states
+    n_actions = env.n_actions
+
+    # Initialize the Q-table to 0
+    Q = np.zeros((n_states,n_actions))
+
+    # Initialize # table of numbers of visits
+    n = np.zeros((n_states,n_actions))
+
+    # Iteration over episodes
+    for e in range(n_episodes):
+        # Initialize to starting state
+        s = env.mapping[start]
+        is_terminal = False
+
+        # Initialize starting action
+        a = choose_action(s)
+        
+        # For each step in the episode
+        for i in range(max_iters):
+            # Increment # of visits of pair [s,a]
+            n[s,a] += 1
+
+            # We take the action in the environment 
+            next_s = env.move(s,a)
+            next_a = choose_action(next_s)
+
+            # Are we already in a terminal state?
+            is_terminal = env.subset[next_s] == -1 or env.subset[next_s] == 1
+            
+            # We update our Q-table using the SARSA iteration
+            lr = 1/(n[s,a]**lr_alpha)
+            Q[s,a] = (1-lr)*Q[s,a] + lr*(r[s,a] + gamma*Q[next_s,next_a])
+
+            # If the episode is finished, we leave the for loop
+            if is_terminal :
+                break
+
+            # Update next state and action
+            s = next_s
+            a = next_a
+            
+        
+        # Value function of the initial state
+        init_V = max(Q[env.mapping[start],env.acts_thomas[(start[0],start[1])]])
+
+        # Update epsilon according to exponential decay formula
+        epsilon = max(epsilon_min, np.exp(-exp_decreasing_decay*e))
+        init_Vs.append(init_V)
+
+    # Compute optimal policy with what we have learned
+    policy = []
+    for s in range(n_states) :
+        (i_t,j_t,i_m,j_m,key) = env.states[s]
+        a_ind = np.argmax(Q[s,env.acts_thomas[(i_t,j_t)]])
+        a = env.acts_thomas[(i_t,j_t)][a_ind]
+        policy.append(a)
+    
+    return Q, policy, init_Vs
 
 def draw_maze(maze):
     # Size of the maze
