@@ -50,17 +50,6 @@ class FourierLinearApprox :
         # Update weights
         self.w = self.w + z.dot(delta_t)
 
-def running_average(self, x, N):
-        ''' Function used to compute the running mean
-            of the last N elements of a vector x
-        '''
-        if len(x) >= N:
-            y = np.copy(x)
-            y[N-1:] = np.convolve(x, np.ones((N, )) / N, mode='valid')
-        else:
-            y = np.zeros_like(x)
-        return y
-
 def scale_state_variables(self, s, low=env.observation_space.low, high=env.observation_space.high):
     ''' Rescaling of s to the box [0,1]^2 '''
     x = (s - low) / (high - low)
