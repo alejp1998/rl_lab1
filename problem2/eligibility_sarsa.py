@@ -13,10 +13,11 @@
 # Load packages
 import numpy as np
 from numpy import cos, pi
+import time
 
 class FourierLinearApprox :
     def __init__(self, etas, nA):
-        """ Constructor of eligibility SARSA """
+        ''' Constructor of eligibility SARSA '''
         # Order of the Fourier basis functions
         self.order = len(etas)
         # Basis function parameters
@@ -38,26 +39,19 @@ class FourierLinearApprox :
         ''' Compute grad w.r.t. w_a of Q(s,a) for a given state and action '''
         return self.basis_functions(s)
     
-    def update_weights (self,alpha,delta_t,z) :
+    def update_weights (self,m,v,delta_t,z_alpha) :
         ''' Update approx. parameters'''
-        # Learning rate values
-        alphas = [alpha] + [alpha/np.linalg.norm(self.etas[i]) for i in range(1,self.order+1)]
-
-        # Multiply each column in z by respective learning rate
-        for row in range(self.order+1) :
-            z[row,:] = alphas[row]*z[row,:]
-        
         # Update weights
-        self.w = self.w + delta_t*z
+        self.w = self.w + m*v + delta_t*z_alpha
     
     def show(self) :
-        print('----------------------------------------')
+        print('--------------------------------------------------\n')
         print('Fourier Linear Approx. Description')
         print('Order = ',self.order)
         print('Basis vectors = ',self.etas)
         print('# Actions = ',self.nA)
         print('Params. matrix w :\n',self.w)
-        print('----------------------------------------')
+        print('\n--------------------------------------------------')
 
 def scale_state_variables(s, low, high) :
     ''' Rescaling of s to the box [0,1]^2 '''
@@ -76,8 +70,8 @@ def choose_action(fla, s, epsilon) :
         a = np.argmax([fla.Qw(s,a) for a in range(fla.nA)])
     return a
 
-def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, n_episodes=100, max_iters=200) :
-    """ Finds solution using eligibility SARSA
+def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, n_episodes=100, max_iters=200, debug = False) :
+    ''' Finds solution using eligibility SARSA
         :input Gym env            : Environment for which we want to find the best policy
         :input float elig_lambda  : The eligibility factor.
         :input float gamma        : The discount factor.
@@ -85,7 +79,7 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
         :input float epsilon      : The nitial exploring probability.
         :input int n_episodes     : # of episodes to simulate.
         :input int max_iters      : max. # of steps of each episode.
-    """
+    '''
     
     # Environment lower and upper state space bounds
     low, high = env.observation_space.low, env.observation_space.high
@@ -103,12 +97,25 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
         done = False
         s = scale_state_variables(env.reset(),low,high)
         episode_reward = 0
-
+        
         # Initialize starting action
         a = choose_action(fla,s,epsilon)
-
+        
         # Initialize eligibility traces
         z = np.zeros((fla.order+1,fla.nA))
+
+        # Initialize the velocity term
+        v = np.zeros((fla.order+1,fla.nA))
+
+        # Clip the eligibility traces values to avoid exploding gradient
+        np.clip(z, -5, 5)
+
+        if debug and (e%50 == 0 or e==n_episodes-1) : 
+            print('\n\nEPISODE ',e)
+            print('Initial state = ',s)
+            print('Initial action = ',a)
+            print('Initial z = ',z)
+            time.sleep(3)
 
         # For each step in the episode
         for i in range(max_iters):
@@ -116,10 +123,10 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
             # Step environment and get next state and make it a feature
             next_s, reward, done, _ = env.step(a)
             next_s = scale_state_variables(next_s,low,high)
-
+            
             # Choose next action
             next_a = choose_action(fla,s,epsilon)
-            
+
             # Update the eligibility traces
             for action in range(fla.nA) :
                 if action == a :
@@ -130,8 +137,19 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
             # Compute temporal difference error
             delta_t = reward + gamma*fla.Qw(next_s,next_a) - fla.Qw(s,a)
 
-            # Update the parameters vector
-            fla.update_weights(alpha,delta_t,z)
+            # Learning rate values
+            alphas = [alpha] + [alpha/np.linalg.norm(fla.etas[i]) for i in range(1,fla.order+1)]
+            # Multiply each column in z by respective learning rate
+            z_alpha = z.copy()
+            for row in range(fla.order+1) :
+                z_alpha[row,:] = alphas[row]*z_alpha[row,:]
+            
+            # Update velocity term with Nesterov Acceleration
+            m = 0.5
+            v = m*v + delta_t*z_alpha
+
+            # Update weights with Nesterov Acceleration
+            fla.update_weights(m,v,delta_t,z_alpha)
 
             # Update episode rewards 
             episode_reward += reward
@@ -139,6 +157,19 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
             # If the episode is finished, we leave the for loop
             if done :
                 break
+            
+            if debug and (e%50 == 0 or e==n_episodes-1) : 
+                print('\nIteration ',i)
+                print('Current state = ',s)
+                print('State basis functions = ',fla.basis_functions(s))
+                print('Current action = ',a)
+                print('Next state = ',next_s)
+                print('Next action = ',next_a)
+                print('Updated z = ',z)
+                print('Temporal diff. error = ',delta_t)
+                print('Updated weights = ',fla.w)
+                env.render()
+                time.sleep(0.05)
 
             # Update next state and action
             s = next_s
