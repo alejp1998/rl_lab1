@@ -1,0 +1,11 @@
+# Training hyperparameters
+elig_lambda = 0.9
+gamma = 1
+alpha = 0.0075
+epsilon = 0
+momentum = 0.5
+n_episodes = 50
+max_iters = 200
+decrease_alpha = True
+decrease_epsilon = False
+debug = False

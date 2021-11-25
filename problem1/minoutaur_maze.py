@@ -6,9 +6,9 @@
 # 19980430-T472
 # aljp@kth.se
 
-# Xavi ...
-# XXXXXXXX-ZXXX
-# xavi@kth.se
+# Xavi de Gibert Duart
+# 19970105-T477
+# xdgd@kth.se
 
 import numpy as np
 import random

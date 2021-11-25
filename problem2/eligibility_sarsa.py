@@ -6,9 +6,9 @@
 # 19980430-T472
 # aljp@kth.se
 
-# Xavi ...
-# XXXXXXXX-ZXXX
-# xavi@kth.se
+# Xavi de Gibert Duart
+# 19970105-T477
+# xdgd@kth.se
 
 # Load packages
 import numpy as np
@@ -77,7 +77,7 @@ def choose_action(fla, s, epsilon) :
         a = np.argmax([fla.Qw(s,a) for a in range(fla.nA)])
     return a
 
-def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, n_episodes=100, max_iters=200, decrease_alpha = False, decrease_epsilon = False,  debug = False) :
+def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, momentum=0.5, n_episodes=100, max_iters=200, decrease_alpha = False, decrease_epsilon = False,  debug = False) :
     ''' Finds solution using eligibility SARSA
         :input Gym env            : Environment for which we want to find the best policy
         :input float elig_lambda  : The eligibility factor.
@@ -112,6 +112,9 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
     # Initial learning rate
     init_alpha = alpha
     alpha_min = 0.0001
+    
+    # Nesterov Acceleration Momentum 
+    m = momentum
 
     # Reward collected in each episode
     max_episode_reward = -200 #initial max episode reward
@@ -178,7 +181,6 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
                 z_alpha[row,:] = alphas[row]*z_alpha[row,:]
             
             # Update velocity term with Nesterov Acceleration
-            m = 0.5
             v = m*v + delta_t*z_alpha
 
             # Update weights with Nesterov Acceleration
@@ -216,7 +218,7 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
         # Decrease learning rate if we are getting close to solution
         if episode_reward > max_episode_reward and decrease_alpha :
             max_episode_reward = episode_reward
-            alpha = max(init_alpha*(-max_episode_reward/200),alpha_min)
+            alpha = alpha*0.7
 
         # Update epsilon according to exponential decay formula
         if decrease_epsilon :
