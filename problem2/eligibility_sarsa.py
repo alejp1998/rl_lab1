@@ -16,20 +16,27 @@ from numpy import cos, pi
 import time
 
 class FourierLinearApprox :
-    def __init__(self, etas, nA):
+    def __init__(self, etas, nA, null_base = True):
         ''' Constructor of eligibility SARSA '''
         # Order of the Fourier basis functions
         self.order = len(etas)
-        # Basis function parameters
-        self.etas = [[0,0]] + etas
+        if null_base : 
+            # Basis function parameters
+            self.etas = [[0,0]] + etas
+            # Parameters matrix
+            self.w = np.zeros((len(etas) + 1,nA))
+        else : 
+            # Basis function parameters
+            self.etas = etas
+            # Parameters matrix
+            self.w = np.zeros((len(etas),nA))
         # Number of available actions
         self.nA = nA
-        # Parameters matrix
-        self.w = np.zeros((len(etas) + 1,nA))
+        
 
     def basis_functions (self, s) :
         ''' Compute basis functions vector for a given state '''
-        return np.array([cos(pi*np.dot(np.array(self.etas[i]),s)) for i in range(self.order+1)])
+        return np.array([cos(pi*np.dot(np.array(self.etas[i]),s)) for i in range(len(self.etas))])
     
     def Qw (self, s, a) :
         ''' Compute Q for a given state and action '''
@@ -70,7 +77,7 @@ def choose_action(fla, s, epsilon) :
         a = np.argmax([fla.Qw(s,a) for a in range(fla.nA)])
     return a
 
-def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, n_episodes=100, max_iters=200, decrease_alpha = False, debug = False) :
+def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, n_episodes=100, max_iters=200, decrease_alpha = False, decrease_epsilon = False,  debug = False) :
     ''' Finds solution using eligibility SARSA
         :input Gym env            : Environment for which we want to find the best policy
         :input float elig_lambda  : The eligibility factor.
@@ -80,13 +87,29 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
         :input int n_episodes     : # of episodes to simulate.
         :input int max_iters      : max. # of steps of each episode.
     '''
-    
+    print('\nTraining Eligibility SARSA')
+    print('Hyperparameters: ')
+    print('elig_lambda = ',elig_lambda)
+    print('gamma = ',gamma)
+    print('alpha = ',alpha)
+    print('epsilon = ',epsilon)
+    print('n_episodes = ',n_episodes)
+    print('max_iters = ',max_iters)
+    print('decrease_alpha = ',decrease_alpha)
+    print('decrease_epsilon = ',decrease_epsilon)
+    print('debug = ',debug,'\n')
+
     # Environment lower and upper state space bounds
     low, high = env.observation_space.low, env.observation_space.high
 
     # Minimum epsilon (min exploration prob)
-    epsilon_min = 0.01
+    epsilon_min = 0.0001
     init_epsilon = epsilon
+    decay_delta = 2/3
+
+    # Initial learning rate
+    init_alpha = alpha
+    alpha_min = 0.0001
 
     # Reward collected in each episode
     max_episode_reward = -200 #initial max episode reward
@@ -104,10 +127,10 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
         a = choose_action(fla,s,epsilon)
         
         # Initialize eligibility traces
-        z = np.zeros((fla.order+1,fla.nA))
+        z = np.zeros((len(fla.etas),fla.nA))
 
         # Initialize the velocity term
-        v = np.zeros((fla.order+1,fla.nA))
+        v = np.zeros((len(fla.etas),fla.nA))
 
         # Clip the eligibility traces values to avoid exploding gradient
         np.clip(z, -5, 5)
@@ -116,8 +139,9 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
             print('\n\nEPISODE ',e)
             print('Initial state = ',s)
             print('Initial action = ',a)
-            print('Initial z = ',z)
-            print('Initial alpha = ',alpha)
+            print('Initial z = \n',z)
+            print('Initial v = \n',v)
+            print('alpha = ',alpha)
             time.sleep(5)
 
         # For each step in the episode
@@ -141,10 +165,14 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
             delta_t = reward + gamma*fla.Qw(next_s,next_a) - fla.Qw(s,a)
 
             # Learning rate values
-            alphas = [alpha] + [alpha/np.linalg.norm(fla.etas[i]) for i in range(1,fla.order+1)]
+            if len(fla.etas) > fla.order :
+                alphas = [alpha] + [alpha/np.linalg.norm(fla.etas[i]) for i in range(1,fla.order+1)]
+            else :
+                alphas = [alpha/np.linalg.norm(fla.etas[i]) for i in range(0,len(fla.etas))]
+
             # Multiply each column in z by respective learning rate
             z_alpha = z.copy()
-            for row in range(fla.order+1) :
+            for row in range(len(fla.etas)) :
                 z_alpha[row,:] = alphas[row]*z_alpha[row,:]
             
             # Update velocity term with Nesterov Acceleration
@@ -168,9 +196,10 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
                 print('Current action = ',a)
                 print('Next state = ',next_s)
                 print('Next action = ',next_a)
-                print('Updated z = ',z)
+                print('Updated z = \n',z)
+                print('Updated v = \n',v)
                 print('Temporal diff. error = ',delta_t)
-                print('Updated weights = ',fla.w)
+                print('Updated weights = \n',fla.w)
                 env.render()
                 time.sleep(0.05)
 
@@ -184,7 +213,12 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
         
         # Decrease learning rate if we are getting close to solution
         if episode_reward > max_episode_reward and decrease_alpha :
-            alpha = alpha*(abs(episode_reward)/200)
             max_episode_reward = episode_reward
+            alpha = max(init_alpha*(-max_episode_reward/200),alpha_min)
+
+        # Update epsilon according to exponential decay formula
+        if decrease_epsilon :
+            epsilon = max(epsilon_min, init_epsilon/((e+1)**(decay_delta)))
+            
     
     return episodes_reward, episodes_alpha
