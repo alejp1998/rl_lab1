@@ -70,7 +70,7 @@ def choose_action(fla, s, epsilon) :
         a = np.argmax([fla.Qw(s,a) for a in range(fla.nA)])
     return a
 
-def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, n_episodes=100, max_iters=200, debug = False) :
+def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, n_episodes=100, max_iters=200, decrease_alpha = False, debug = False) :
     ''' Finds solution using eligibility SARSA
         :input Gym env            : Environment for which we want to find the best policy
         :input float elig_lambda  : The eligibility factor.
@@ -89,7 +89,9 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
     init_epsilon = epsilon
 
     # Reward collected in each episode
+    max_episode_reward = -200 #initial max episode reward
     episodes_reward = []
+    episodes_alpha = []
 
     # Iteration over episodes
     for e in range(n_episodes):
@@ -110,12 +112,13 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
         # Clip the eligibility traces values to avoid exploding gradient
         np.clip(z, -5, 5)
 
-        if debug and (e%50 == 0 or e==n_episodes-1) : 
+        if debug and (e%10 == 0 or e==n_episodes-1) : 
             print('\n\nEPISODE ',e)
             print('Initial state = ',s)
             print('Initial action = ',a)
             print('Initial z = ',z)
-            time.sleep(3)
+            print('Initial alpha = ',alpha)
+            time.sleep(5)
 
         # For each step in the episode
         for i in range(max_iters):
@@ -158,7 +161,7 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
             if done :
                 break
             
-            if debug and (e%50 == 0 or e==n_episodes-1) : 
+            if debug and (e%10 == 0 or e==n_episodes-1) : 
                 print('\nIteration ',i)
                 print('Current state = ',s)
                 print('State basis functions = ',fla.basis_functions(s))
@@ -174,8 +177,14 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
             # Update next state and action
             s = next_s
             a = next_a
-        
-        # Append total episode collected reward
+
+        # Append total episode collected reward and learning rate
         episodes_reward.append(episode_reward)
+        episodes_alpha.append(alpha)
+        
+        # Decrease learning rate if we are getting close to solution
+        if episode_reward > max_episode_reward and decrease_alpha :
+            alpha = alpha*(abs(episode_reward)/200)
+            max_episode_reward = episode_reward
     
-    return episodes_reward
+    return episodes_reward, episodes_alpha
