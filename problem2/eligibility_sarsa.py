@@ -22,12 +22,12 @@ class FourierLinearApprox :
         self.order = len(etas)
         if null_base : 
             # Basis function parameters
-            self.etas = [[0,0]] + etas
+            self.etas = np.array([[0,0]] + etas)
             # Parameters matrix
             self.w = np.zeros((len(etas) + 1,nA))
         else : 
             # Basis function parameters
-            self.etas = etas
+            self.etas = np.array(etas)
             # Parameters matrix
             self.w = np.zeros((len(etas),nA))
         # Number of available actions
@@ -55,7 +55,7 @@ class FourierLinearApprox :
         print('--------------------------------------------------\n')
         print('Fourier Linear Approx. Description')
         print('Order = ',self.order)
-        print('Basis vectors = ',self.etas)
+        print('Basis vectors : \n',self.etas)
         print('# Actions = ',self.nA)
         print('Params. matrix w :\n',self.w)
         print('\n--------------------------------------------------')
@@ -87,17 +87,19 @@ def eligibility_sarsa(env, fla, elig_lambda=1, gamma=1, alpha=0.001, epsilon=0, 
         :input int n_episodes     : # of episodes to simulate.
         :input int max_iters      : max. # of steps of each episode.
     '''
-    print('\nTraining Eligibility SARSA')
-    print('Hyperparameters: ')
-    print('elig_lambda = ',elig_lambda)
-    print('gamma = ',gamma)
-    print('alpha = ',alpha)
-    print('epsilon = ',epsilon)
-    print('n_episodes = ',n_episodes)
-    print('max_iters = ',max_iters)
-    print('decrease_alpha = ',decrease_alpha)
-    print('decrease_epsilon = ',decrease_epsilon)
-    print('debug = ',debug,'\n')
+
+    if debug :
+        print('\nTraining Eligibility SARSA')
+        print('Hyperparameters: ')
+        print('elig_lambda = ',elig_lambda)
+        print('gamma = ',gamma)
+        print('alpha = ',alpha)
+        print('epsilon = ',epsilon)
+        print('n_episodes = ',n_episodes)
+        print('max_iters = ',max_iters)
+        print('decrease_alpha = ',decrease_alpha)
+        print('decrease_epsilon = ',decrease_epsilon)
+        print('debug = ',debug,'\n')
 
     # Environment lower and upper state space bounds
     low, high = env.observation_space.low, env.observation_space.high

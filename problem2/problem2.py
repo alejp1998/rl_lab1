@@ -13,13 +13,15 @@
 
 # Load packages
 import eligibility_sarsa as es
+import pickle
 import numpy as np
 import gym
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # HELPER FUNCTIONS
-def running_average(x, N):
+def running_average (x, N):
     ''' Running mean of the last N elements of a vector x'''
     if len(x) >= N:
         y = np.copy(x)
@@ -28,7 +30,7 @@ def running_average(x, N):
         y = np.zeros_like(x)
     return y
 
-def plot_opt_policy_or_value_func(fla,type) :
+def plot_opt_policy_or_value_func (fla,type) :
     # Sample Qw(s,a) values
     x_low, x_high = -1.2, 0.6
     y_low, y_high = -0.07, 0.07
@@ -64,6 +66,60 @@ def plot_opt_policy_or_value_func(fla,type) :
     )
     fig.show()
 
+def test_lambdas_alphas (fla,N) :
+    alphas = [i*(0.05-0.001)/N for i in range(1,N+1)]
+    elig_lambdas = [i/N for i in range(N+1)]
+
+    decrease_alpha = False
+    # Test several alphas
+    elig_lambda = 0.95
+    alphas_episodes_reward = []
+    for alpha in alphas :
+        fla = es.FourierLinearApprox(etas,nA,null_base)
+        episodes_reward, episodes_alpha = es.eligibility_sarsa(env,fla,elig_lambda,gamma,alpha,epsilon,n_episodes,max_iters,decrease_alpha,decrease_epsilon,debug)
+        alphas_episodes_reward.append(np.mean(episodes_reward))
+    # Test several lambdas
+    alpha = 0.0075
+    elig_lambdas_episodes_reward = []
+    for elig_lambda in elig_lambdas :
+        fla = es.FourierLinearApprox(etas,nA,null_base)
+        episodes_reward, episodes_alpha = es.eligibility_sarsa(env,fla,elig_lambda,gamma,alpha,epsilon,n_episodes,max_iters,decrease_alpha,decrease_epsilon,debug)
+        elig_lambdas_episodes_reward.append(np.mean(episodes_reward))
+
+    # Plot comparison of results
+    fig = go.Figure()
+    # Add traces
+    fig.add_trace(
+        go.Scatter(x=alphas, y=alphas_episodes_reward, name="Dep. on Learning Rates")
+    )
+    # Add figure title
+    fig.update_layout(
+        title_text="Average Reward depending on Alphas"
+    )
+    
+    # Set x-axis title
+    fig.update_xaxes(title_text="Average Reward")
+    # Set y-axes title
+    fig.update_yaxes(title_text="Learning Rate")
+    fig.show()
+
+    # Plot comparison of results
+    fig = go.Figure()
+    # Add traces
+    fig.add_trace(
+        go.Scatter(x=elig_lambdas, y=elig_lambdas_episodes_reward, name="Dep. on Elig. Lambda")
+    )
+    # Add figure title
+    fig.update_layout(
+        title_text="Average Reward depending on Elig. Lambdas"
+    )
+    
+    # Set x-axis title
+    fig.update_xaxes(title_text="Average Reward")
+    # Set y-axes title
+    fig.update_yaxes(title_text="Elig. Lambda")
+    fig.show()
+
 # Import and initialize Mountain Car Environment
 env = gym.make('MountainCar-v0')
 env.reset()
@@ -80,27 +136,48 @@ fla = es.FourierLinearApprox(etas,nA,null_base)
 fla.show()
 
 # Training hyperparameters
-elig_lambda = 0.9
+elig_lambda = 0.95
 gamma = 1
-alpha = 0.008
+alpha = 0.01
 epsilon = 0
 n_episodes = 50
 max_iters = 200
 decrease_alpha = True
 decrease_epsilon = False
-debug = True
+debug = False
+
+# Analyze average total reward of policy as function of alpha and lambda
+print('\nAnalyzing average total reward of policy as function of alpha and lambda')
+N = 20
+test_lambdas_alphas(fla,N)
+print('\n--------------------------------------------------')
+
+
 
 # Train with Eligibility SARSA
-episodes_reward, episodes_alpha = es.eligibility_sarsa(env,fla,elig_lambda,gamma,alpha,epsilon,n_episodes,max_iters,decrease_alpha,decrease_epsilon,debug)
+average_episodes_reward = -200
+reward_th = -130 
+n = 0
+while average_episodes_reward < reward_th :
+    print('\n',n,'. Average Reward = ',average_episodes_reward,' < ', reward_th, ', training again...')
+    fla = es.FourierLinearApprox(etas,nA,null_base)
+    episodes_reward, episodes_alpha = es.eligibility_sarsa(env,fla,elig_lambda,gamma,alpha,epsilon,n_episodes,max_iters,decrease_alpha,decrease_epsilon,debug)
+    average_episodes_reward = np.mean(episodes_reward[-25:])
+    n += 1
+print('\nAverage Reward = ',average_episodes_reward,' > -110, training finished!')
 
 # Final parameters matrix w
-#plot_value_function(fla)
-plot_opt_policy_or_value_func(fla,'opt_policy')
-plot_opt_policy_or_value_func(fla,'value_func')
 print('--------------------------------------------------\n')
 print('After training over episodes')
-print('Final params. matrix w :\n',fla.w)
+W = fla.w.transpose()
+N = fla.etas
+print('W:\n',W)
+print('N:\n',N)
 print('\n--------------------------------------------------')
+
+# Plot color optimal policy and value function
+plot_opt_policy_or_value_func(fla,'opt_policy')
+plot_opt_policy_or_value_func(fla,'value_func')
 
 # Plot statistics
 fig, ax1 = plt.subplots()
@@ -117,5 +194,11 @@ ax1.legend()
 ax2.legend()
 plt.grid(alpha=0.3)
 plt.show()
+
+# Create pickle file
+data = {'W':W, 'N': N}
+filename = 'weights.pkl'
+print('\nSaving weights and etas to ',filename)
+pickle.dump(data, open(filename, "wb" ))
 
 
