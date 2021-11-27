@@ -96,12 +96,12 @@ debug = False
 average_episodes_reward = -200
 reward_th = -130 
 n = 0
-#while average_episodes_reward < reward_th :
-print('\n',n,'. Average Reward = ',average_episodes_reward,' < ', reward_th, ', training again...')
-fla = es.FourierLinearApprox(etas,nA,null_base)
-episodes_reward, episodes_alpha = es.eligibility_sarsa(env,fla,elig_lambda,gamma,alpha,epsilon,momentum,n_episodes,max_iters,decrease_alpha,decrease_epsilon,debug)
-average_episodes_reward = np.mean(episodes_reward[-25:])
-n += 1
+while average_episodes_reward < reward_th :
+    print('\n',n,'. Average Reward = ',average_episodes_reward,' < ', reward_th, ', training again...')
+    fla = es.FourierLinearApprox(etas,nA,null_base)
+    episodes_reward, episodes_alpha = es.eligibility_sarsa(env,fla,elig_lambda,gamma,alpha,epsilon,momentum,n_episodes,max_iters,decrease_alpha,decrease_epsilon,debug)
+    average_episodes_reward = np.mean(episodes_reward[-25:])
+    n += 1
 print('\nAverage Reward = ',average_episodes_reward,' > ',reward_th,', training finished!')
 
 # Final parameters matrix w
