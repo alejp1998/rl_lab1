@@ -1,0 +1,24 @@
+[project]
+name = "rl-lab1"
+version = "1.1.0"
+description = "Reinforcement Learning Lab 1 — Minotaur Maze (tabular RL) + Mountain Car (SARSA with Fourier features)."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy<2",
+    "matplotlib",
+    "gym==0.25.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "jupyter", "nbconvert"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: long-running training tests (deselect with -m 'not slow')"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+include = ["tests/**"]  # gate the test suite; 2021 lab code left as-is
+

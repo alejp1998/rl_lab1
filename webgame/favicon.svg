@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#FFFFFF" stroke="#0F172A" stroke-width="2.5"/>
+  <!-- maze grid -->
+  <path d="M14 14 h12 v10 h-12 z M38 14 h12 v10 h-12 z M14 32 h12 v10 h-12 z M38 32 h12 v10 h-12 z" fill="none" stroke="#0F172A" stroke-width="2.5"/>
+  <!-- exit -->
+  <circle cx="50" cy="50" r="6" fill="#F59E0B" stroke="#0F172A" stroke-width="2"/>
+  <!-- agent + arrow -->
+  <circle cx="20" cy="50" r="5.5" fill="#22C55E" stroke="#0F172A" stroke-width="2"/>
+  <path d="M28 46 l8 -8" stroke="#0F172A" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M36 38 l-1 5 l5 1 z" fill="#0F172A"/>
+</svg>

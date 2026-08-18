@@ -68,7 +68,7 @@ class MinotaurMaze:
     KEY_REWARD = 100
     VICTORY_REWARD = 500
     LOSS_REWARD = -1000
-    IMPOSSIBLE_REWARD = -np.Inf
+    IMPOSSIBLE_REWARD = -np.inf
 
 
     def __init__(self, maze, minotaur_can_wait = False, key_needed = False):

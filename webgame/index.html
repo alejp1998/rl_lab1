@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RL Lab 1 — Interactive</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t) document.documentElement.setAttribute("data-theme", t);
+          else if (window.matchMedia("(prefers-color-scheme: dark)").matches)
+            document.documentElement.setAttribute("data-theme", "dark");
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="style.css?v=1" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 64 64" width="26" height="26">
+            <rect x="4" y="4" width="56" height="56" rx="12" fill="#FFFFFF" stroke="#0F172A" stroke-width="2.5" />
+            <path d="M14 20 h14 v14 h-14 z M36 20 h14 v14 h-14 z M14 42 h14 v14 h-14 z M36 42 h14 v14 h-14 z" fill="none" stroke="#0F172A" stroke-width="2.5" />
+            <circle cx="50" cy="14" r="4" fill="#0F172A" />
+            <path d="M46 50 l8 -8" stroke="#0F172A" stroke-width="2.5" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div>
+          <h1>RL Lab 1 — Interactive <span class="badge">WEB EDITION</span></h1>
+          <div class="subtitle">Minotaur Maze · Value Iteration · Mountain Car SARSA(λ)</div>
+        </div>
+      </div>
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="maze">🐂 Minotaur Maze</button>
+        <button class="tab" data-tab="car">⛰️ Mountain Car</button>
+      </nav>
+      <div class="header-actions">
+        <button class="btn" id="btn-guide">📖 Guide</button>
+        <button class="btn" id="btn-restart">↻ Restart</button>
+        <button class="btn" id="btn-theme" title="Toggle theme">☀️</button>
+      </div>
+    </header>
+
+    <main class="cockpit">
+      <div class="stage-wrap">
+        <div class="stage-panel" id="stage-panel">
+          <canvas id="view"></canvas>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <section class="panel">
+          <h2 id="panel-title">🐂 Minotaur Maze</h2>
+          <div id="maze-hud" class="hud">
+            <div class="hud-row"><span>Status</span><b id="hud-status">Playing</b></div>
+            <div class="hud-row"><span>Steps</span><b id="hud-steps">0</b></div>
+            <div class="hud-row"><span>Wins</span><b id="hud-wins">0</b></div>
+            <div class="hud-row"><span>Losses</span><b id="hud-losses">0</b></div>
+          </div>
+          <div id="car-hud" class="hud hidden">
+            <div class="hud-row"><span>Episode</span><b id="hud-episode">0 / 0</b></div>
+            <div class="hud-row"><span>Reward (avg 10)</span><b id="hud-reward">—</b></div>
+            <div class="hud-row"><span>Best run</span><b id="hud-best">—</b></div>
+            <div class="hud-row"><span>Position</span><b id="hud-pos">-0.50</b></div>
+          </div>
+          <div id="hud-result" class="hud-result hidden"></div>
+        </section>
+
+        <section class="panel" id="maze-controls">
+          <h2>🕹️ Maze Controls</h2>
+          <div class="mode-row">
+            <button class="btn mode-btn active" id="mode-play">▶ Play</button>
+            <button class="btn mode-btn" id="mode-vi">🧮 Value Iteration</button>
+          </div>
+          <div id="vi-options" class="hidden">
+            <label class="slider-row">γ (gamma) <input id="vi-gamma" type="range" min="0.5" max="0.999" step="0.001" value="0.99" /><b id="vi-gamma-v">0.99</b></label>
+            <label class="slider-row">Animation speed <input id="vi-speed" type="range" min="1" max="60" step="1" value="12" /><b id="vi-speed-v">12 sweeps/s</b></label>
+            <button class="btn" id="btn-vi-run">▶ Run VI</button>
+          </div>
+          <div id="play-options">
+            <div class="keys">
+              <b>Arrow keys / WASD</b> — move Thomas<br />
+              <b>R</b> — new round · <b>AI</b> — suggested move shown as arrow
+            </div>
+          </div>
+        </section>
+
+        <section class="panel hidden" id="car-controls">
+          <h2>🕹️ Car Controls</h2>
+          <div class="mode-row">
+            <button class="btn mode-btn active" id="car-learn">🧠 Learn (SARSA λ)</button>
+            <button class="btn mode-btn" id="car-play">🎮 Drive</button>
+          </div>
+          <div id="car-sliders">
+            <label class="slider-row">λ (eligibility) <input id="car-lambda" type="range" min="0" max="1" step="0.05" value="0.9" /><b id="car-lambda-v">0.90</b></label>
+            <label class="slider-row">α (learning rate) <input id="car-alpha" type="range" min="0.0005" max="0.05" step="0.0005" value="0.005" /><b id="car-alpha-v">0.005</b></label>
+            <label class="slider-row">ε (exploration) <input id="car-eps" type="range" min="0" max="1" step="0.05" value="0.1" /><b id="car-eps-v">0.10</b></label>
+            <label class="slider-row">Fourier order <input id="car-order" type="range" min="2" max="8" step="1" value="5" /><b id="car-order-v">5</b></label>
+          </div>
+          <div class="keys">
+            <b>← / →</b> or <b>A / D</b> — throttle<br />
+            <b>Space</b> — boost
+          </div>
+        </section>
+
+        <section class="panel log-panel">
+          <h2>📡 Log</h2>
+          <div class="log" id="log"></div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="hintbar">
+      maze: arrows move · VI: watch values converge · car: learn or drive with ← →
+    </footer>
+
+    <div id="guide" class="modal hidden">
+      <div class="modal-backdrop" data-close-guide></div>
+      <div class="modal-card">
+        <button class="modal-close" data-close-guide title="Close">✕</button>
+        <h2>📖 About this page</h2>
+        <h3>🎓 The Lab</h3>
+        <p>
+          <b>Reinforcement Learning Lab 1</b> (KTH/UPM, 2021) solves two classic RL
+          problems:
+        </p>
+        <ul>
+          <li><b>Problem 1 — Minotaur Maze</b> (Tabular RL): Thomas must reach the exit while a
+          minotaur moves around the maze. The full joint MDP is solved with
+          <b>value iteration</b>, and compared against Q-learning and SARSA in the notebook.</li>
+          <li><b>Problem 2 — Mountain Car</b> (Function approximation): the car must climb the
+          right hill using <b>SARSA(λ)</b> with a <b>Fourier linear basis</b>, Nesterov
+          momentum and eligibility traces.</li>
+        </ul>
+        <h3>🐂 Minotaur Maze — Play</h3>
+        <p>
+          Move Thomas with the arrow keys (wait with <b>Space</b>). The minotaur takes a
+          uniform random legal move after yours. Reach the <b>gold exit</b> to win; if the
+          minotaur lands on you, you lose. <b>Wins/Losses</b> are tallied in the sidebar.
+        </p>
+        <h3>🧮 Value Iteration</h3>
+        <p>
+          Click <b>Run VI</b> — the optimal V-values (Bellman backups over the whole joint
+          state space) converge sweep by sweep, visualized as a heatmap on the slice where
+          the minotaur currently stands. Arrows show the greedy optimal action per cell.
+        </p>
+        <h3>⛰️ Mountain Car</h3>
+        <p>
+          The car is too weak to climb directly — it must build momentum by swinging back
+          and forth. <b>Learn</b> runs the lab's SARSA(λ) with Fourier features live in your
+          browser (α, λ, ε, basis order are adjustable); the reward curve climbs as the
+          policy improves. <b>Drive</b> lets you throttle manually (← / →, Space boosts).
+        </p>
+        <h3>🖥️ Implementation</h3>
+        <p>
+          The Python algorithms from the lab were ported 1:1 to JavaScript
+          (<code>rl1-core.js</code>) with a matching <code>node:test</code> suite — same
+          state space, same Bellman updates, same SARSA(λ) trace update. Source:
+          <a href="https://github.com/alejp1998/rl_lab1" target="_blank" rel="noopener">github.com/alejp1998/rl_lab1</a>.
+        </p>
+      </div>
+    </div>
+
+    <script src="js/rl1-core.js?v=1"></script>
+    <script src="js/main.js?v=1"></script>
+  </body>
+</html>
