@@ -4,6 +4,8 @@
 [![Tests](https://img.shields.io/badge/tests-13%2F13-22C55E?style=flat-square)](tests/)
 [![Play](https://img.shields.io/badge/▶%20Play-Interactive%20Web%20Edition-8B5CF6?style=flat-square)](https://alejp1998.github.io/rl_lab1/)
 
+> **▶️ Play it live:** <https://alejp1998.github.io/rl_lab1/> — the whole lab runs in your browser (Minotaur Maze + Mountain Car).
+
 Two classic reinforcement learning problems solved from scratch:
 
 | Problem | Task | Method |
