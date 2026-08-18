@@ -8,8 +8,6 @@
   var S = window.RL1;
   var canvas = document.getElementById("view");
   var ctx = canvas.getContext("2d");
-  var chartCanvas = document.getElementById("car-chart");
-  var chartCtx = chartCanvas ? chartCanvas.getContext("2d") : null;
   var $id = function (id) {
     return document.getElementById(id);
   };
@@ -387,20 +385,15 @@
     canvas.style.width = w + "px";
     canvas.style.height = h + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (chartCanvas && !chartCanvas.classList.contains("hidden")) {
-      var ch = 148;
-      chartCanvas.width = Math.floor(w * dpr);
-      chartCanvas.height = Math.floor(ch * dpr);
-      chartCanvas.style.width = w + "px";
-      chartCanvas.style.height = ch + "px";
-      chartCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
   }
 
   function render() {
     if (tab === "maze") renderMaze();
     else renderCar();
-    if (tab === "car") drawChartComponent();
+    if (tab === "car" && carChart && Date.now() - lastChartT > 250) {
+      carChart.update();
+      lastChartT = Date.now();
+    }
   }
 
   function renderMaze() {
@@ -746,62 +739,6 @@
     );
   }
 
-  function drawChartComponent() {
-    if (!chartCtx || !chartCanvas || chartCanvas.classList.contains("hidden"))
-      return;
-    var c = chartCtx;
-    var w = chartCanvas.width / Math.max(1, window.devicePixelRatio || 1);
-    var h = chartCanvas.height / Math.max(1, window.devicePixelRatio || 1);
-    var p = pal();
-    var margin = 40;
-    c.clearRect(0, 0, w, h);
-    c.fillStyle = p.panel + "55";
-    c.fillRect(margin, 6, w - margin * 2, h - 12);
-    c.strokeStyle = p.chartGrid;
-    c.beginPath();
-    for (var i = 0; i <= 4; i++) {
-      var yy = 6 + ((h - 12) * i) / 4;
-      c.moveTo(margin, yy);
-      c.lineTo(w - margin, yy);
-    }
-    c.stroke();
-    c.fillStyle = p.muted;
-    c.font = "10px system-ui";
-    c.textAlign = "left";
-    c.fillText("episode reward (10-ep running avg)", margin + 6, 20);
-
-    if (car.rewards.length < 2) {
-      c.fillStyle = p.faint;
-      c.textAlign = "center";
-      c.font = "600 12px system-ui";
-      c.fillText("training…", w / 2, h / 2 + 4);
-      return;
-    }
-    var n = car.rewards.length;
-    var data = [];
-    for (var e = 0; e < n; e++) {
-      var from = Math.max(0, e - 9);
-      var slice = car.rewards.slice(from, e + 1);
-      data.push(
-        slice.reduce(function (a, b) {
-          return a + b;
-        }, 0) / slice.length,
-      );
-    }
-    var minR = Math.min.apply(null, data) - 5;
-    var maxR = Math.max.apply(null, data) + 5;
-    c.strokeStyle = p.chart;
-    c.lineWidth = 2;
-    c.beginPath();
-    for (var k = 0; k < data.length; k++) {
-      var x = margin + (k / Math.max(1, n - 1)) * (w - margin * 2);
-      var y = 6 + (h - 12) * (1 - (data[k] - minR) / (maxR - minR || 1));
-      if (k === 0) c.moveTo(x, y);
-      else c.lineTo(x, y);
-    }
-    c.stroke();
-  }
-
   function clamp01(x) {
     return x < 0 ? 0 : x > 1 ? 1 : x;
   }
@@ -1017,7 +954,43 @@
   }
 
   // ---------------------------------------------------------------- init
+  // D3 reward chart (own component, SVG — not canvas/Pixi)
+  function carAvgData() {
+    var n = car.rewards.length;
+    var data = [];
+    for (var e = 0; e < n; e++) {
+      var from = Math.max(0, e - 9);
+      var slice = car.rewards.slice(from, e + 1);
+      data.push(
+        slice.reduce(function (a, b) {
+          return a + b;
+        }, 0) / slice.length,
+      );
+    }
+    return data;
+  }
+  var carChart = null;
+  var lastChartT = 0;
+  function initChart() {
+    var el = document.getElementById("car-chart");
+    if (!el || !window.MiniChart) return;
+    carChart = window.MiniChart(el, {
+      height: 148,
+      title: "episode reward (10-ep running avg)",
+      emptyText: "training…",
+      pad: 6,
+      getData: carAvgData,
+      color: function () {
+        return pal().chart;
+      },
+    });
+  }
+
   function init() {
+    initChart();
+    setInterval(function () {
+      if (tab === "car" && carChart) carChart.update();
+    }, 300);
     applyTheme();
     wireGuide();
     wire();
