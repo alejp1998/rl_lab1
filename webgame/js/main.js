@@ -8,29 +8,59 @@
   var S = window.RL1;
   var canvas = document.getElementById("view");
   var ctx = canvas.getContext("2d");
-  var $id = function (id) { return document.getElementById(id); };
+  var $id = function (id) {
+    return document.getElementById(id);
+  };
 
   // ---------------------------------------------------------------- theme
   var PAL = {
     dark: {
-      bg: "#0b0f19", panel: "#111c30", grid: "rgba(148,163,184,0.14)",
-      wall: "#1e293b", wallEdge: "#334155", empty: "#101a2c",
-      exit: "#fbbf24", exitEdge: "#f59e0b",
-      thomas: "#22c55e", thomasEdge: "#15803d", mino: "#ef4444", minoEdge: "#b91c1c",
-      text: "#e2e8f0", muted: "#94a3b8", faint: "#64748b",
+      bg: "#0b0f19",
+      panel: "#111c30",
+      grid: "rgba(148,163,184,0.14)",
+      wall: "#1e293b",
+      wallEdge: "#334155",
+      empty: "#101a2c",
+      exit: "#fbbf24",
+      exitEdge: "#f59e0b",
+      thomas: "#22c55e",
+      thomasEdge: "#15803d",
+      mino: "#ef4444",
+      minoEdge: "#b91c1c",
+      text: "#e2e8f0",
+      muted: "#94a3b8",
+      faint: "#64748b",
       heat: ["#0f172a", "#164e63", "#0e7490", "#06b6d4", "#22d3ee", "#fbbf24"],
-      track: "#1e293b", trackEdge: "#334155", car: "#38bdf8", carEdge: "#0284c7",
-      chart: "#22d3ee", chartGrid: "rgba(148,163,184,0.15)",
+      track: "#1e293b",
+      trackEdge: "#334155",
+      car: "#38bdf8",
+      carEdge: "#0284c7",
+      chart: "#22d3ee",
+      chartGrid: "rgba(148,163,184,0.15)",
     },
     light: {
-      bg: "#f1f5f9", panel: "#ffffff", grid: "rgba(51,65,85,0.12)",
-      wall: "#cbd5e1", wallEdge: "#94a3b8", empty: "#f8fafc",
-      exit: "#f59e0b", exitEdge: "#b45309",
-      thomas: "#16a34a", thomasEdge: "#15803d", mino: "#ef4444", minoEdge: "#b91c1c",
-      text: "#0f172a", muted: "#475569", faint: "#64748b",
+      bg: "#f1f5f9",
+      panel: "#ffffff",
+      grid: "rgba(51,65,85,0.12)",
+      wall: "#cbd5e1",
+      wallEdge: "#94a3b8",
+      empty: "#f8fafc",
+      exit: "#f59e0b",
+      exitEdge: "#b45309",
+      thomas: "#16a34a",
+      thomasEdge: "#15803d",
+      mino: "#ef4444",
+      minoEdge: "#b91c1c",
+      text: "#0f172a",
+      muted: "#475569",
+      faint: "#64748b",
       heat: ["#f8fafc", "#cffafe", "#67e8f9", "#06b6d4", "#0e7490", "#f59e0b"],
-      track: "#e2e8f0", trackEdge: "#94a3b8", car: "#0284c7", carEdge: "#0c4a6e",
-      chart: "#0891b2", chartGrid: "rgba(51,65,85,0.12)",
+      track: "#e2e8f0",
+      trackEdge: "#94a3b8",
+      car: "#0284c7",
+      carEdge: "#0c4a6e",
+      chart: "#0891b2",
+      chartGrid: "rgba(51,65,85,0.12)",
     },
   };
 
@@ -89,8 +119,12 @@
     var r = $id("hud-result");
     r.className = "hud-result " + cls;
     r.innerHTML =
-      '<div class="hud-result-title">' + title + "</div>" +
-      '<div class="hud-result-sub">' + sub + "</div>";
+      '<div class="hud-result-title">' +
+      title +
+      "</div>" +
+      '<div class="hud-result-sub">' +
+      sub +
+      "</div>";
   }
   function clearResult() {
     $id("hud-result").className = "hud-result hidden";
@@ -148,7 +182,9 @@
     maze.vi = S.valueIteration(maze.mdp, maze.viGamma, 1e-3);
     maze.viSweep = maze.vi.sweeps.length - 1;
     log(
-      "✅ VI converged in " + maze.vi.iterations + " sweeps · max V=" +
+      "✅ VI converged in " +
+        maze.vi.iterations +
+        " sweeps · max V=" +
         Math.round(Math.max.apply(null, maze.vi.V)),
     );
     $id("hud-status").textContent = "VI done";
@@ -161,14 +197,17 @@
     maze.viSweep = 0;
     log("▶ Animating " + maze.vi.sweeps.length + " sweeps…");
     var speed = maze.viSpeed;
-    maze.viTimer = setInterval(function () {
-      maze.viSweep++;
-      if (maze.viSweep >= maze.vi.sweeps.length) {
-        stopVI();
-        log("🏁 VI converged (final policy shown).");
-      }
-      render();
-    }, Math.max(16, 1000 / speed));
+    maze.viTimer = setInterval(
+      function () {
+        maze.viSweep++;
+        if (maze.viSweep >= maze.vi.sweeps.length) {
+          stopVI();
+          log("🏁 VI converged (final policy shown).");
+        }
+        render();
+      },
+      Math.max(16, 1000 / speed),
+    );
   }
 
   function stopVI() {
@@ -193,7 +232,8 @@
   function carChoose(w, etas, s, eps) {
     if (Math.random() < eps) return Math.floor(Math.random() * 3);
     var best = 0;
-    for (var a = 1; a < 3; a++) if (carQ(w, etas, s, a) > carQ(w, etas, s, best)) best = a;
+    for (var a = 1; a < 3; a++)
+      if (carQ(w, etas, s, a) > carQ(w, etas, s, best)) best = a;
     return best;
   }
 
@@ -233,7 +273,10 @@
       var ns = carState(env);
       var na = res.done ? 0 : carChoose(w, etas, ns, eps);
       var phi = S.fourierFeatures(etas, s);
-      var delta = res.reward + (res.done ? 0 : gamma * carQ(w, etas, ns, na)) - carQ(w, etas, s, a);
+      var delta =
+        res.reward +
+        (res.done ? 0 : gamma * carQ(w, etas, ns, na)) -
+        carQ(w, etas, s, a);
       for (var k2 = 0; k2 < phi.length; k2++) {
         z[k2][a] = gamma * lambda * z[k2][a] + phi[k2];
         w[k2][a] += alpha * delta * z[k2][a];
@@ -256,9 +299,14 @@
     car.w = [];
     for (var k = 0; k < carEta(order).length + 1; k++) car.w.push([0, 0, 0]);
     log(
-      "🧠 SARSA(λ) · Fourier order " + order + " · λ=" +
-        Number($id("car-lambda").value) + " · α=" + Number($id("car-alpha").value) +
-        " · ε=" + Number($id("car-eps").value),
+      "🧠 SARSA(λ) · Fourier order " +
+        order +
+        " · λ=" +
+        Number($id("car-lambda").value) +
+        " · α=" +
+        Number($id("car-alpha").value) +
+        " · ε=" +
+        Number($id("car-eps").value),
     );
     if (car.learnTimer) clearInterval(car.learnTimer);
     car.learnTimer = setInterval(function () {
@@ -271,8 +319,12 @@
           break;
         }
         if (car.episode >= car.nEpisodes) {
-          log("🏁 " + car.nEpisodes + " episodes done — best avg reward: " +
-            Math.round(bestAvg() * 10) / 10);
+          log(
+            "🏁 " +
+              car.nEpisodes +
+              " episodes done — best avg reward: " +
+              Math.round(bestAvg() * 10) / 10,
+          );
           stopCarLearn();
           break;
         }
@@ -292,13 +344,21 @@
   function bestAvg() {
     if (car.rewards.length === 0) return 0;
     var tail = car.rewards.slice(-10);
-    return tail.reduce(function (a, b) { return a + b; }, 0) / tail.length;
+    return (
+      tail.reduce(function (a, b) {
+        return a + b;
+      }, 0) / tail.length
+    );
   }
 
   function updateCarHud() {
     $id("hud-episode").textContent = car.episode + " / " + car.nEpisodes;
-    $id("hud-reward").textContent = car.rewards.length ? String(Math.round(bestAvg() * 10) / 10) : "—";
-    $id("hud-best").textContent = car.rewards.length ? String(Math.max.apply(null, car.rewards)) : "—";
+    $id("hud-reward").textContent = car.rewards.length
+      ? String(Math.round(bestAvg() * 10) / 10)
+      : "—";
+    $id("hud-best").textContent = car.rewards.length
+      ? String(Math.max.apply(null, car.rewards))
+      : "—";
     $id("hud-pos").textContent = car.env.x.toFixed(2);
   }
 
@@ -393,22 +453,37 @@
         }
         // VI policy arrow
         if (maze.mode === "vi" && maze.vi && cell !== 1 && maze.mdp) {
-          var key = i + "," + j + "," + maze.state[2] + "," + maze.state[3] + ",1";
+          var key =
+            i + "," + j + "," + maze.state[2] + "," + maze.state[3] + ",1";
           var sid = maze.mdp.map.get(key);
           if (sid !== undefined) {
-            drawArrow(x + cw / 2, y + cw / 2, cw * 0.32, maze.vi.policy[sid], p.text);
+            drawArrow(
+              x + cw / 2,
+              y + cw / 2,
+              cw * 0.32,
+              maze.vi.policy[sid],
+              p.text,
+            );
           }
         }
       }
     }
 
     // entities
-    var mi = maze.state[2], mj = maze.state[3];
-    var ti = maze.state[0], tj = maze.state[1];
+    var mi = maze.state[2],
+      mj = maze.state[3];
+    var ti = maze.state[0],
+      tj = maze.state[1];
     // minotaur
     ctx.fillStyle = p.mino;
     ctx.beginPath();
-    ctx.arc(ox + (mj + 0.5) * cw, oy + (mi + 0.5) * cw, cw * 0.38, 0, Math.PI * 2);
+    ctx.arc(
+      ox + (mj + 0.5) * cw,
+      oy + (mi + 0.5) * cw,
+      cw * 0.38,
+      0,
+      Math.PI * 2,
+    );
     ctx.fill();
     ctx.strokeStyle = p.minoEdge;
     ctx.lineWidth = 2;
@@ -422,7 +497,13 @@
     // thomas
     ctx.fillStyle = p.thomas;
     ctx.beginPath();
-    ctx.arc(ox + (tj + 0.5) * cw, oy + (ti + 0.5) * cw, cw * 0.34, 0, Math.PI * 2);
+    ctx.arc(
+      ox + (tj + 0.5) * cw,
+      oy + (ti + 0.5) * cw,
+      cw * 0.34,
+      0,
+      Math.PI * 2,
+    );
     ctx.fill();
     ctx.strokeStyle = p.thomasEdge;
     ctx.lineWidth = 2;
@@ -459,8 +540,10 @@
 
   function viSliceHeat() {
     var mdp = maze.mdp;
-    var sweepV = maze.vi.sweeps[Math.min(maze.viSweep, maze.vi.sweeps.length - 1)];
-    var mi = maze.state[2], mj = maze.state[3];
+    var sweepV =
+      maze.vi.sweeps[Math.min(maze.viSweep, maze.vi.sweeps.length - 1)];
+    var mi = maze.state[2],
+      mj = maze.state[3];
     var grid = [];
     var vals = [];
     for (var i = 0; i < S.ROWS; i++) {
@@ -480,12 +563,17 @@
   }
 
   function drawArrow(cx, cy, len, action, color, noHead) {
-    var dx = 0, dy = 0;
-    if (action === 1) { dx = -1; }
-    else if (action === 2) { dx = 1; }
-    else if (action === 3) { dy = -1; }
-    else if (action === 4) { dy = 1; }
-    else return; // wait
+    var dx = 0,
+      dy = 0;
+    if (action === 1) {
+      dx = -1;
+    } else if (action === 2) {
+      dx = 1;
+    } else if (action === 3) {
+      dy = -1;
+    } else if (action === 4) {
+      dy = 1;
+    } else return; // wait
     var x2 = cx + dx * len;
     var y2 = cy + dy * len;
     ctx.strokeStyle = color;
@@ -545,16 +633,20 @@
     drawChart(w, chartH, p);
 
     // --- track
-    var xMin = -1.2, xMax = 0.6;
+    var xMin = -1.2,
+      xMax = 0.6;
     var margin = 40;
     var tw = w - margin * 2;
     var baseY = trackTop + th - 20;
 
-    function toX(x) { return margin + ((x - xMin) / (xMax - xMin)) * tw; }
+    function toX(x) {
+      return margin + ((x - xMin) / (xMax - xMin)) * tw;
+    }
     function toY(y) {
-      // hill height in [-0.55, 0.9], scaled to sit below the chart
+      // hill height range is [-0.55, 0.9] (span 1.45): scale so the ENTIRE
+      // slope sits inside the track box below the chart
       var hh = 0.9 - y;
-      return baseY - (hh / 1.15) * (th - 40);
+      return baseY - (hh / 1.45) * (th - 44);
     }
 
     // hill polygon
@@ -593,7 +685,8 @@
     var cy = toY(S.mountainCarTrack(car.env.x));
     ctx.save();
     var rot = Math.atan2(
-      toY(S.mountainCarTrack(car.env.x + 0.01)) - toY(S.mountainCarTrack(car.env.x - 0.01)),
+      toY(S.mountainCarTrack(car.env.x + 0.01)) -
+        toY(S.mountainCarTrack(car.env.x - 0.01)),
       toX(car.env.x + 0.01) - toX(car.env.x - 0.01),
     );
     ctx.translate(cx, cy);
@@ -674,7 +767,11 @@
     for (var e = 0; e < n; e++) {
       var from = Math.max(0, e - 9);
       var slice = car.rewards.slice(from, e + 1);
-      data.push(slice.reduce(function (a, b) { return a + b; }, 0) / slice.length);
+      data.push(
+        slice.reduce(function (a, b) {
+          return a + b;
+        }, 0) / slice.length,
+      );
     }
     var minR = Math.min.apply(null, data) - 5;
     var maxR = Math.max.apply(null, data) + 5;
@@ -696,10 +793,14 @@
 
   // ---------------------------------------------------------------- input
   var keyMap = {
-    ArrowUp: 3, KeyW: 3,
-    ArrowDown: 4, KeyS: 4,
-    ArrowLeft: 1, KeyA: 1,
-    ArrowRight: 2, KeyD: 2,
+    ArrowUp: 3,
+    KeyW: 3,
+    ArrowDown: 4,
+    KeyS: 4,
+    ArrowLeft: 1,
+    KeyA: 1,
+    ArrowRight: 2,
+    KeyD: 2,
   };
 
   document.addEventListener("keydown", function (e) {
@@ -779,10 +880,13 @@
     // tabs
     document.querySelectorAll(".tab").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        document.querySelectorAll(".tab").forEach(function (b) { b.classList.remove("active"); });
+        document.querySelectorAll(".tab").forEach(function (b) {
+          b.classList.remove("active");
+        });
         btn.classList.add("active");
         tab = btn.dataset.tab;
-        $id("panel-title").textContent = tab === "maze" ? "🐂 Minotaur Maze" : "⛰️ Mountain Car";
+        $id("panel-title").textContent =
+          tab === "maze" ? "🐂 Minotaur Maze" : "⛰️ Mountain Car";
         $id("maze-hud").classList.toggle("hidden", tab !== "maze");
         $id("car-hud").classList.toggle("hidden", tab !== "car");
         $id("maze-controls").classList.toggle("hidden", tab !== "maze");
@@ -856,18 +960,28 @@
 
     // theme
     $id("btn-theme").addEventListener("click", function () {
-      var t = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      var t =
+        document.documentElement.getAttribute("data-theme") === "dark"
+          ? "light"
+          : "dark";
       document.documentElement.setAttribute("data-theme", t);
-      try { localStorage.setItem("theme", t); } catch (e) {}
+      try {
+        localStorage.setItem("theme", t);
+      } catch (e) {}
       applyTheme();
       render();
     });
-    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function (ev) {
-      if (localStorage.getItem("theme")) return;
-      document.documentElement.setAttribute("data-theme", ev.matches ? "dark" : "light");
-      applyTheme();
-      render();
-    });
+    window
+      .matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", function (ev) {
+        if (localStorage.getItem("theme")) return;
+        document.documentElement.setAttribute(
+          "data-theme",
+          ev.matches ? "dark" : "light",
+        );
+        applyTheme();
+        render();
+      });
 
     $id("btn-restart").addEventListener("click", function () {
       if (tab === "maze") {
