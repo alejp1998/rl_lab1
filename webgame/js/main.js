@@ -8,6 +8,8 @@
   var S = window.RL1;
   var canvas = document.getElementById("view");
   var ctx = canvas.getContext("2d");
+  var chartCanvas = document.getElementById("car-chart");
+  var chartCtx = chartCanvas ? chartCanvas.getContext("2d") : null;
   var $id = function (id) {
     return document.getElementById(id);
   };
@@ -385,11 +387,20 @@
     canvas.style.width = w + "px";
     canvas.style.height = h + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (chartCanvas && !chartCanvas.classList.contains("hidden")) {
+      var ch = 148;
+      chartCanvas.width = Math.floor(w * dpr);
+      chartCanvas.height = Math.floor(ch * dpr);
+      chartCanvas.style.width = w + "px";
+      chartCanvas.style.height = ch + "px";
+      chartCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
   }
 
   function render() {
     if (tab === "maze") renderMaze();
     else renderCar();
+    if (tab === "car") drawChartComponent();
   }
 
   function renderMaze() {
@@ -625,19 +636,16 @@
     ctx.fillStyle = p.bg;
     ctx.fillRect(0, 0, w, h);
 
-    var chartH = Math.max(90, h * 0.22);
-    var trackTop = chartH + 26;
-    var th = h - trackTop - 16;
-
-    // --- chart
-    drawChart(w, chartH, p);
+    // the reward chart lives in its own component (#car-chart) above this canvas
+    var trackTop = 14;
+    var th = h - trackTop - 20;
 
     // --- track
     var xMin = -1.2,
       xMax = 0.6;
     var margin = 40;
     var tw = w - margin * 2;
-    var baseY = trackTop + th - 20;
+    var baseY = trackTop + th - 14;
 
     function toX(x) {
       return margin + ((x - xMin) / (xMax - xMin)) * tw;
@@ -738,28 +746,35 @@
     );
   }
 
-  function drawChart(w, chartH, p) {
+  function drawChartComponent() {
+    if (!chartCtx || !chartCanvas || chartCanvas.classList.contains("hidden"))
+      return;
+    var c = chartCtx;
+    var w = chartCanvas.width / Math.max(1, window.devicePixelRatio || 1);
+    var h = chartCanvas.height / Math.max(1, window.devicePixelRatio || 1);
+    var p = pal();
     var margin = 40;
-    ctx.fillStyle = p.panel + "88";
-    ctx.fillRect(margin, 8, w - margin * 2, chartH - 16);
-    ctx.strokeStyle = p.chartGrid;
-    ctx.beginPath();
+    c.clearRect(0, 0, w, h);
+    c.fillStyle = p.panel + "55";
+    c.fillRect(margin, 6, w - margin * 2, h - 12);
+    c.strokeStyle = p.chartGrid;
+    c.beginPath();
     for (var i = 0; i <= 4; i++) {
-      var y = 8 + ((chartH - 16) * i) / 4;
-      ctx.moveTo(margin, y);
-      ctx.lineTo(w - margin, y);
+      var yy = 6 + ((h - 12) * i) / 4;
+      c.moveTo(margin, yy);
+      c.lineTo(w - margin, yy);
     }
-    ctx.stroke();
-    ctx.fillStyle = p.muted;
-    ctx.font = "10px system-ui";
-    ctx.textAlign = "left";
-    ctx.fillText("episode reward (10-ep running avg)", margin + 6, 22);
+    c.stroke();
+    c.fillStyle = p.muted;
+    c.font = "10px system-ui";
+    c.textAlign = "left";
+    c.fillText("episode reward (10-ep running avg)", margin + 6, 20);
 
     if (car.rewards.length < 2) {
-      ctx.fillStyle = p.faint;
-      ctx.textAlign = "center";
-      ctx.font = "600 12px system-ui";
-      ctx.fillText("training…", w / 2, chartH / 2 + 4);
+      c.fillStyle = p.faint;
+      c.textAlign = "center";
+      c.font = "600 12px system-ui";
+      c.fillText("training…", w / 2, h / 2 + 4);
       return;
     }
     var n = car.rewards.length;
@@ -775,16 +790,16 @@
     }
     var minR = Math.min.apply(null, data) - 5;
     var maxR = Math.max.apply(null, data) + 5;
-    ctx.strokeStyle = p.chart;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
+    c.strokeStyle = p.chart;
+    c.lineWidth = 2;
+    c.beginPath();
     for (var k = 0; k < data.length; k++) {
       var x = margin + (k / Math.max(1, n - 1)) * (w - margin * 2);
-      var y = 8 + (chartH - 16) * (1 - (data[k] - minR) / (maxR - minR || 1));
-      if (k === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      var y = 6 + (h - 12) * (1 - (data[k] - minR) / (maxR - minR || 1));
+      if (k === 0) c.moveTo(x, y);
+      else c.lineTo(x, y);
     }
-    ctx.stroke();
+    c.stroke();
   }
 
   function clamp01(x) {
@@ -889,6 +904,7 @@
           tab === "maze" ? "🐂 Minotaur Maze" : "⛰️ Mountain Car";
         $id("maze-hud").classList.toggle("hidden", tab !== "maze");
         $id("car-hud").classList.toggle("hidden", tab !== "car");
+        $id("car-chart").classList.toggle("hidden", tab !== "car");
         $id("maze-controls").classList.toggle("hidden", tab !== "maze");
         $id("car-controls").classList.toggle("hidden", tab !== "car");
         stopVI();
