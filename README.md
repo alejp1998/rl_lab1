@@ -15,6 +15,15 @@ Two classic reinforcement learning problems solved from scratch:
 
 Team: Alejandro Jarabo-Peñas · Xavi de Gibert Duart (KTH Royal Institute of Technology, 2021).
 
+### 🖼️ Screenshots
+
+| Minotaur Maze | Mountain Car |
+|---|---|
+| ![Minotaur Maze](docs/webgame_maze.png) | ![Mountain Car](docs/webgame_car.png) |
+
+| Value Iteration | |
+|---|---|
+| ![Value Iteration](docs/webgame_vi.png) | |
 ## 🎮 Interactive web edition
 
 The whole lab is playable in the browser at
