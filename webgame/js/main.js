@@ -194,6 +194,7 @@
   function animateVI() {
     if (maze.mode !== "vi" || !maze.vi) return;
     stopVI();
+    $id("btn-vi-run").textContent = "⏸ Pause VI";
     maze.viSweep = 0;
     log("▶ Animating " + maze.vi.sweeps.length + " sweeps…");
     var speed = maze.viSpeed;
@@ -215,6 +216,8 @@
       clearInterval(maze.viTimer);
       maze.viTimer = null;
     }
+    var b = $id("btn-vi-run");
+    if (b) b.textContent = "▶ Run VI";
   }
 
   // ---------------------------------------------------------------- car
