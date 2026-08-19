@@ -602,42 +602,43 @@
       }
     }
 
-    // legend (bottom-left)
+    // legend (bottom-left) — rounded swatch before label, on a soft card
     ctx.font = "600 " + Math.max(11, cw * 0.24) + "px system-ui";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    var ly = oy + rows * cw + 20;
+    var ly = oy + rows * cw + 26;
     var lx = ox + 2;
-    var sw = Math.max(12, cw * 0.24);
-    var gap = Math.max(58, cw * 1.15);
+    var sw = Math.max(10, cw * 0.22);
     var items = [
       ["Thomas", p.thomasEdge],
       ["Minotaur", p.minoEdge],
-      ["exit", p.exitEdge],
+      ["Exit", p.exitEdge],
     ];
+    if (probs) items.push(["Minotaur forecast", "rgba(239,68,68,0.55)"]);
+    var widths = items.map(function (it) {
+      return ctx.measureText(it[0]).width + sw + 10;
+    });
+    var totalW = widths.reduce(function (a, b) {
+      return a + b;
+    }, 0);
+    // soft card behind the legend
+    ctx.fillStyle = p.panel;
+    ctx.beginPath();
+    ctx.roundRect(lx - 8, ly - sw - 10, totalW + 16, sw + 18, 8);
+    ctx.fill();
+    ctx.strokeStyle = p.faint;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    var x = lx;
     for (var li = 0; li < items.length; li++) {
-      var ix = lx + li * gap;
-      ctx.fillStyle = p.muted;
-      ctx.fillText(items[li][0], ix, ly);
+      ctx.beginPath();
+      ctx.roundRect(x, ly - sw - 1, sw, sw, sw / 2);
       ctx.fillStyle = items[li][1];
-      ctx.fillRect(
-        ix + ctx.measureText(items[li][0]).width + 6,
-        ly - 10,
-        sw,
-        11,
-      );
-    }
-    if (probs) {
-      var hx = lx + items.length * gap;
-      ctx.fillStyle = "rgba(239,68,68,0.55)";
-      ctx.fillRect(
-        hx + ctx.measureText("minotaur forecast").width + 6,
-        ly - 10,
-        sw,
-        11,
-      );
+      ctx.fill();
+      x += sw + 6;
       ctx.fillStyle = p.muted;
-      ctx.fillText("minotaur forecast", hx, ly);
+      ctx.fillText(items[li][0], x, ly);
+      x += widths[li] - sw - 6;
     }
   }
 
@@ -865,11 +866,16 @@
     function toX(x) {
       return margin + ((x - xMin) / (xMax - xMin)) * tw;
     }
+    // sin(3x) over the episode spans [-1, 1]: peak (y=1) at the top of the
+    // track box, valley (y=-1) at the bottom — fully inside the canvas
+    var yMin = -1,
+      yMax = 1;
+    var trackTopY = 26,
+      trackBottomY = h - 24;
     function toY(y) {
-      // hill height range is [-0.55, 0.9] (span 1.45): scale so the ENTIRE
-      // slope sits inside the track box below the chart
-      var hh = 0.9 - y;
-      return baseY - (hh / 1.45) * (th - 44);
+      return (
+        trackTopY + ((yMax - y) / (yMax - yMin)) * (trackBottomY - trackTopY)
+      );
     }
 
     // hill polygon
