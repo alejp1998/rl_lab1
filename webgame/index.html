@@ -20,7 +20,7 @@
         } catch (e) {}
       })();
     </script>
-    <link rel="stylesheet" href="style.css?v=1" />
+    <link rel="stylesheet" href="style.css?v=3" />
   </head>
   <body>
     <header class="topbar">
@@ -231,71 +231,136 @@
       <div class="modal-card">
         <button class="modal-close" data-close-guide title="Close">✕</button>
         <h2>📖 About this page</h2>
-        <h3>🎓 The Lab</h3>
-        <p>
-          <b>Reinforcement Learning Lab 1</b> (KTH/UPM, 2021) solves two classic
-          RL problems:
-        </p>
-        <ul>
-          <li>
-            <b>Problem 1 — Minotaur Maze</b> (Tabular RL): Thomas must reach the
-            exit while a minotaur moves around the maze. The full joint MDP is
-            solved with <b>value iteration</b>, and compared against Q-learning
-            and SARSA in the notebook.
-          </li>
-          <li>
-            <b>Problem 2 — Mountain Car</b> (Function approximation): the car
-            must climb the right hill using <b>SARSA(λ)</b> with a
-            <b>Fourier linear basis</b>, Nesterov momentum and eligibility
-            traces.
-          </li>
-        </ul>
-        <h3>🐂 Minotaur Maze — Play</h3>
-        <p>
-          Move <b>Thomas</b> with the arrow keys (wait with <b>Space</b>). The
-          minotaur takes a uniform random legal move after yours. Reach the
-          <b>green exit</b> to win; if the minotaur lands on you, you lose. The
-          <b>orange arrows</b> trace the optimal route (with step numbers), the
-          <b>red heat</b> forecasts the minotaur's likely wanderings, and
-          <b>🤖 Auto</b> plays the optimal policy for you. <b>Win prob</b> is
-          the Monte-Carlo victory probability of the optimal policy from the
-          current state (the lab reports 1.0 for the fixed path).
-        </p>
-        <h3>🧮 Value Iteration</h3>
-        <p>
-          Click <b>Run VI</b> — the optimal V-values (Bellman backups over the
-          whole joint state space) converge sweep by sweep, visualized as a
-          heatmap on the slice where the minotaur currently stands. Arrows show
-          the greedy optimal action per cell.
-        </p>
-        <h3>⛰️ Mountain Car</h3>
-        <p>
-          The car is too weak to climb directly — it must build momentum by
-          swinging back and forth. <b>Learn</b> runs the lab's SARSA(λ) with
-          Fourier features live in your browser (α, λ, ε, basis order are
-          adjustable); the reward curve climbs as the policy improves.
-          <b>Drive</b> lets you throttle manually (← / →, Space boosts).
-        </p>
-        <h3>🖥️ Implementation</h3>
-        <p>
-          The Python algorithms from the lab were ported 1:1 to JavaScript
-          (<code>rl1-core.js</code>) with a matching
-          <code>node:test</code> suite — same state space, same Bellman updates,
-          same SARSA(λ) trace update. Source:
-          <a
-            href="https://github.com/alejp1998/rl_lab1"
-            target="_blank"
-            rel="noopener"
-            >github.com/alejp1998/rl_lab1</a
-          >.
-        </p>
+        <div class="guide-tabs">
+          <button class="guide-tab active" data-tab="theory">🧠 Theory</button>
+          <button class="guide-tab" data-tab="game">🎮 Game</button>
+        </div>
+
+        <section class="guide-panel" data-tab="theory">
+          <h3>🎓 The Lab</h3>
+          <p>
+            <b>Reinforcement Learning Lab 1</b> (KTH/UPM, 2021) solves two
+            classic RL problems: the <b>Minotaur Maze</b> with tabular methods,
+            and the <b>Mountain Car</b> with linear function approximation. Both
+            algorithms are ported 1:1 from Python to <code>rl1-core.js</code>,
+            with a matching <code>node:test</code>
+            suite (same state space, same Bellman/SARSA updates).
+          </p>
+
+          <h3>🐂 Minotaur Maze — Markov Decision Process</h3>
+          <p>
+            The maze is a stochastic shortest-path MDP. The state is the joint
+            configuration of both agents and the key flag
+          </p>
+          <p class="math">
+            \[ \mathcal{S} = \{(t_i, t_j, m_i, m_j, k)\} \quad k \in \{0,1\} \]
+          </p>
+          <p>
+            where \((t_i,t_j)\) is Thomas's cell and \((m_i,m_j)\) the
+            minotaur's. Thomas chooses one of five actions (wait, left, right,
+            up, down); the minotaur then takes a
+            <b>uniformly random legal move</b>. With no key required, the lab's
+            transition model is
+          </p>
+          <p class="math">
+            \[ P(s' \mid s, a) = \frac{1}{|A_{\text{mino}}(s)|} \]
+          </p>
+          <p>
+            with rewards \(+500\) for reaching the exit, \(-1000\) if the
+            minotaur catches Thomas, and \(-1\) per step. The optimal value
+            function satisfies the <b>Bellman optimality equation</b>
+          </p>
+          <p class="math">
+            \[ V^*(s) = \max_{a \in \mathcal{A}} \sum_{s'} P(s' \mid s,
+            a)\bigl[R(s,a,s') + \gamma V^*(s')\bigr] \]
+          </p>
+          <p>
+            <b>Value iteration</b> performs synchronous Bellman backups until
+            convergence: \(V_{k+1}(s) \leftarrow \max_a \sum_{s'} P(s'\mid s,a)
+            [R + \gamma V_k(s')]\). The optimal policy is greedy w.r.t. the
+            converged values. The <b>Win prob</b> readout is the Monte-Carlo
+            estimate of the victory probability of the optimal policy from the
+            current state — the lab's fixed-path analysis reports exactly
+            \(P_{\text{vict}} = 1.0\).
+          </p>
+
+          <h3>⛰️ Mountain Car — SARSA(λ) with Fourier basis</h3>
+          <p>
+            The car is underpowered: it must swing back and forth to build
+            momentum. The dynamics are those of gym's MountainCar-v0:
+          </p>
+          <p class="math">
+            \[ x_{t+1} = x_t + v_t, \qquad v_{t+1} = v_t + 0.0015\,a_t -
+            0.0025\cos(3x_t), \qquad a_t \in \{-1, 0, 1\} \]
+          </p>
+          <p>
+            with bounds \(x \in [-1.2, 0.6]\), \(v \in [-0.07, 0.07]\) and goal
+            \(x \ge 0.5\). Because the state space is continuous, the
+            action-value function is approximated linearly with a
+            <b>Fourier basis</b> of order \(N\):
+          </p>
+          <p class="math">
+            \[ Q(s,a) = \mathbf{w}^\top \boldsymbol\phi(s,a), \qquad \phi_i(x,v)
+            = \cos\bigl(\pi (i_x x + i_v v)\bigr), \quad i_x + i_v \le N \]
+          </p>
+          <p>
+            <b>SARSA(λ)</b> learns on-policy with the TD error \(\delta = r +
+            \gamma Q(s',a') - Q(s,a)\) and
+            <b>eligibility traces</b> \(\mathbf{e} \leftarrow
+            \gamma\lambda\,\mathbf{e} + \nabla_\mathbf{w}Q\), updating
+            \(\mathbf{w} \leftarrow \mathbf{w} + \alpha\,\delta\,\mathbf{e}\).
+            The page defaults (\(\alpha = 0.005\), \(\lambda = 0.9\),
+            \(\varepsilon = 0.1\), order 5) reach the flag in ~35 steps.
+          </p>
+        </section>
+
+        <section class="guide-panel hidden" data-tab="game">
+          <h3>🐂 Minotaur Maze — Play</h3>
+          <p>
+            Move <b>Thomas</b> with the arrow keys (wait with <b>Space</b>). The
+            minotaur takes a uniform random legal move after yours. Reach the
+            <b>green exit</b> to win; if the minotaur lands on you, you lose.
+            The <b>orange arrows</b> trace the optimal route (with step
+            numbers), the <b>red heat</b> forecasts the minotaur's likely
+            wanderings, and <b>🤖 Auto</b> plays the optimal policy for you.
+          </p>
+          <h3>🧮 Value Iteration</h3>
+          <p>
+            Click <b>Run VI</b> — the optimal V-values converge sweep by sweep,
+            visualized as a heatmap on the slice where the minotaur currently
+            stands. Arrows show the greedy optimal action per cell.
+          </p>
+          <h3>⛰️ Mountain Car</h3>
+          <p>
+            <b>Learn</b> runs the lab's SARSA(λ) with Fourier features live in
+            your browser (α, λ, ε, basis order adjustable); the reward curve
+            climbs as the policy improves. <b>Drive</b> lets you throttle
+            manually (← / →, Space boosts).
+          </p>
+          <h3>🖥️ Source</h3>
+          <p>
+            <a
+              href="https://github.com/alejp1998/rl_lab1"
+              target="_blank"
+              rel="noopener"
+              >github.com/alejp1998/rl_lab1</a
+            >
+            — Python lab, JS port, tests, notebook.
+          </p>
+        </section>
       </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-    <script src="js/minichart.js?v=2"></script>
-    <script src="js/sprites.js?v=1"></script>
-    <script src="js/rl1-core.js?v=1"></script>
-    <script src="js/main.js?v=1"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"
+      id="MathJax-script"
+      async
+    ></script>
+    <script src="js/minichart.js?v=3"></script>
+    <script src="js/sprites.js?v=3"></script>
+    <script src="js/guide.js?v=3"></script>
+    <script src="js/rl1-core.js?v=3"></script>
+    <script src="js/main.js?v=3"></script>
   </body>
 </html>

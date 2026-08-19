@@ -844,6 +844,10 @@
     var p = pal();
     var w = canvas.width / Math.max(1, window.devicePixelRatio || 1);
     var h = canvas.height / Math.max(1, window.devicePixelRatio || 1);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, w, h);
+    ctx.clip(); // the track can never paint outside the canvas
     ctx.fillStyle = p.bg;
     ctx.fillRect(0, 0, w, h);
 
@@ -955,6 +959,7 @@
       margin,
       trackTop - 6,
     );
+    ctx.restore();
   }
 
   function clamp01(x) {
