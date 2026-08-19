@@ -18,15 +18,15 @@
       bg: "#0b0f19",
       panel: "#111c30",
       grid: "rgba(148,163,184,0.14)",
-      wall: "#1e293b",
-      wallEdge: "#334155",
-      empty: "#101a2c",
-      exit: "#fbbf24",
-      exitEdge: "#f59e0b",
-      thomas: "#22c55e",
-      thomasEdge: "#15803d",
-      mino: "#ef4444",
-      minoEdge: "#b91c1c",
+      wall: "#0b0f19",
+      wallEdge: "#1e293b",
+      empty: "#1e293b",
+      exit: "#14532d",
+      exitEdge: "#4ade80",
+      thomas: "#78350f",
+      thomasEdge: "#f59e0b",
+      mino: "#7f1d1d",
+      minoEdge: "#ef4444",
       text: "#e2e8f0",
       muted: "#94a3b8",
       faint: "#64748b",
@@ -42,15 +42,15 @@
       bg: "#f1f5f9",
       panel: "#ffffff",
       grid: "rgba(51,65,85,0.12)",
-      wall: "#cbd5e1",
-      wallEdge: "#94a3b8",
-      empty: "#f8fafc",
-      exit: "#f59e0b",
-      exitEdge: "#b45309",
-      thomas: "#16a34a",
-      thomasEdge: "#15803d",
-      mino: "#ef4444",
-      minoEdge: "#b91c1c",
+      wall: "#0f172a",
+      wallEdge: "#0f172a",
+      empty: "#ffffff",
+      exit: "#95fd99",
+      exitEdge: "#22c55e",
+      thomas: "#fae0c3",
+      thomasEdge: "#d97706",
+      mino: "#ffc4cc",
+      minoEdge: "#f87171",
       text: "#0f172a",
       muted: "#475569",
       faint: "#64748b",
@@ -412,56 +412,92 @@
 
     var cols = S.COLS;
     var rows = S.ROWS;
-    var pad = Math.min(w, h) * 0.06;
+    var pad = Math.min(w, h) * 0.05;
     var cw = Math.min((w - pad * 2) / cols, (h - pad * 2) / rows);
     var ox = (w - cw * cols) / 2;
     var oy = (h - cw * rows) / 2;
 
-    // heatmap layer (VI mode)
+    // VI value heat layer
     var heat = null;
     if (maze.mode === "vi" && maze.mdp && maze.vi) {
       heat = viSliceHeat();
     }
+    // minotaur position forecast (play) — notebook cell_probs style
+    var probs = null;
+    if (maze.mode === "play" && !maze.over) {
+      probs = minoProbs(10);
+    }
+    // planned policy path (play) — notebook animate_solution style
+    var path = null;
+    if (maze.mode === "play" && maze.mdp && maze.vi) {
+      path = mazePolicyPath();
+    }
+
+    var mi = maze.state[2],
+      mj = maze.state[3];
+    var ti = maze.state[0],
+      tj = maze.state[1];
 
     for (var i = 0; i < rows; i++) {
       for (var j = 0; j < cols; j++) {
         var x = ox + j * cw;
         var y = oy + i * cw;
         var cell = S.MAZE[i][j];
+        var isT = i === ti && j === tj;
+        var isM = i === mi && j === mj;
+
         if (cell === 1) {
           ctx.fillStyle = p.wall;
           ctx.fillRect(x, y, cw, cw);
-          ctx.strokeStyle = p.wallEdge;
-          ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, cw - 1);
+          continue;
+        }
+        if (cell === 2) {
+          ctx.fillStyle = p.exit;
+          ctx.fillRect(x, y, cw, cw);
+          ctx.fillStyle = p.exitEdge;
+          ctx.font = "700 " + Math.max(9, cw * 0.26) + "px system-ui";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("EXIT", x + cw / 2, y + cw / 2 + 1);
+        } else if (isT) {
+          ctx.fillStyle = p.thomas;
+          ctx.fillRect(x, y, cw, cw);
+        } else if (isM) {
+          ctx.fillStyle = p.mino;
+          ctx.fillRect(x, y, cw, cw);
         } else {
           ctx.fillStyle = p.empty;
           ctx.fillRect(x, y, cw, cw);
-          ctx.strokeStyle = p.grid;
-          ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, cw - 1);
-          if (cell === 2) {
-            ctx.fillStyle = p.exit;
-            ctx.beginPath();
-            ctx.arc(x + cw / 2, y + cw / 2, cw * 0.32, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = p.exitEdge;
-            ctx.stroke();
-            ctx.fillStyle = "#0f172a";
-            ctx.font = "700 " + Math.max(10, cw * 0.3) + "px system-ui";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText("EXIT", x + cw / 2, y + cw / 2 + 1);
-          }
         }
-        // heat overlay
+        ctx.strokeStyle = p.grid;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, cw - 1);
+
+        // VI value heat overlay
         if (heat && cell !== 1) {
           var v = heat[i][j];
           if (v !== null) {
-            var t = clamp01((v - heatMin) / (heatMax - heatMin || 1));
-            var ci = Math.min(p.heat.length - 1, Math.floor(t * p.heat.length));
+            var tt = clamp01((v - heatMin) / (heatMax - heatMin || 1));
+            var ci = Math.min(
+              p.heat.length - 1,
+              Math.floor(tt * p.heat.length),
+            );
             ctx.fillStyle = p.heat[ci] + "cc";
+            ctx.fillRect(x, y, cw, cw);
+            ctx.strokeStyle = p.grid;
+            ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, cw - 1);
+          }
+        }
+
+        // minotaur probability overlay (play) — faint red heat
+        if (probs && cell !== 1 && !isM) {
+          var pr = probs[i + "," + j] || 0;
+          if (pr > 0.001) {
+            ctx.fillStyle = "rgba(239,68,68," + (0.1 + 0.5 * pr) + ")";
             ctx.fillRect(x, y, cw, cw);
           }
         }
+
         // VI policy arrow
         if (maze.mode === "vi" && maze.vi && cell !== 1 && maze.mdp) {
           var key =
@@ -480,74 +516,249 @@
       }
     }
 
-    // entities
-    var mi = maze.state[2],
-      mj = maze.state[3];
-    var ti = maze.state[0],
-      tj = maze.state[1];
-    // minotaur
-    ctx.fillStyle = p.mino;
-    ctx.beginPath();
-    ctx.arc(
+    // notebook-style path arrows with step numbers (play mode)
+    if (path && path.length > 1) {
+      for (var k = 0; k < path.length - 1; k++) {
+        var a0 = path[k],
+          a1 = path[k + 1];
+        if (a0.i === a1.i && a0.j === a1.j) continue;
+        var x0 = ox + (a0.j + 0.5) * cw,
+          y0 = oy + (a0.i + 0.5) * cw;
+        var x1 = ox + (a1.j + 0.5) * cw,
+          y1 = oy + (a1.i + 0.5) * cw;
+        var dx = x1 - x0,
+          dy = y1 - y0;
+        var len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-6) continue;
+        var ex = (dx / len) * cw * 0.4,
+          ey = (dy / len) * cw * 0.4;
+        ctx.strokeStyle = "#f97316";
+        ctx.lineWidth = Math.max(2, cw * 0.05);
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1 - ex, y1 - ey);
+        ctx.stroke();
+        var ang = Math.atan2(dy, dx);
+        ctx.beginPath();
+        ctx.moveTo(x1 - ex, y1 - ey);
+        ctx.lineTo(
+          x1 - ex - cw * 0.16 * Math.cos(ang - 0.45),
+          y1 - ey - cw * 0.16 * Math.sin(ang - 0.45),
+        );
+        ctx.lineTo(
+          x1 - ex - cw * 0.16 * Math.cos(ang + 0.45),
+          y1 - ey - cw * 0.16 * Math.sin(ang + 0.45),
+        );
+        ctx.closePath();
+        ctx.fillStyle = "#f97316";
+        ctx.fill();
+        ctx.fillStyle = "#f97316";
+        ctx.font = "700 " + Math.max(10, cw * 0.28) + "px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(
+          String(k + 1),
+          (x0 + x1) / 2 + cw * 0.08,
+          (y0 + y1) / 2 - cw * 0.08,
+        );
+      }
+    }
+
+    // character sprites
+    Sprites.drawMinotaur(
+      ctx,
       ox + (mj + 0.5) * cw,
       oy + (mi + 0.5) * cw,
-      cw * 0.38,
-      0,
-      Math.PI * 2,
+      cw * 0.72,
     );
-    ctx.fill();
-    ctx.strokeStyle = p.minoEdge;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    ctx.font = "700 " + Math.max(10, cw * 0.32) + "px system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("M", ox + (mj + 0.5) * cw, oy + (mi + 0.5) * cw + 1);
-
-    // thomas
-    ctx.fillStyle = p.thomas;
-    ctx.beginPath();
-    ctx.arc(
+    Sprites.drawThomas(
+      ctx,
       ox + (tj + 0.5) * cw,
       oy + (ti + 0.5) * cw,
-      cw * 0.34,
-      0,
-      Math.PI * 2,
+      cw * 0.7,
     );
-    ctx.fill();
-    ctx.strokeStyle = p.thomasEdge;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    ctx.fillText("T", ox + (tj + 0.5) * cw, oy + (ti + 0.5) * cw + 1);
 
-    // AI suggestion (play mode)
-    if (maze.mode === "play" && !maze.over) {
+    // AI suggestion arrow (play mode, manual)
+    if (maze.mode === "play" && !maze.over && !mazeAutoTimer) {
       var best = mazeBestAction();
       if (best !== null && best !== 0) {
         var bx = ox + (tj + 0.5) * cw;
         var by = oy + (ti + 0.5) * cw;
-        ctx.strokeStyle = p.warn;
-        ctx.lineWidth = 2.5;
-        ctx.setLineDash([4, 3]);
-        drawArrow(bx, by, cw * 0.6, best, p.warn, true);
-        ctx.setLineDash([]);
-        ctx.fillStyle = p.warn;
-        ctx.font = "600 " + Math.max(9, cw * 0.22) + "px system-ui";
-        ctx.textAlign = "center";
-        ctx.fillText("AI", bx, by - cw * 0.5);
+        var dang = Math.atan2(ACT_D[best][0], ACT_D[best][1]);
+        ctx.strokeStyle = "#f97316";
+        ctx.lineWidth = Math.max(2, cw * 0.06);
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(
+          bx + ACT_D[best][1] * cw * 0.55,
+          by + ACT_D[best][0] * cw * 0.55,
+        );
+        ctx.lineTo(
+          bx + ACT_D[best][1] * cw * 0.9,
+          by + ACT_D[best][0] * cw * 0.9,
+        );
+        ctx.stroke();
       }
     }
 
-    // VI legend
-    if (maze.mode === "vi" && heat) {
-      drawHeatLegend(w, h, p);
+    // legend (bottom-left)
+    ctx.font = "600 " + Math.max(11, cw * 0.24) + "px system-ui";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    var ly = oy + rows * cw + 20;
+    var lx = ox + 2;
+    var sw = Math.max(12, cw * 0.24);
+    var gap = Math.max(58, cw * 1.15);
+    var items = [
+      ["Thomas", p.thomasEdge],
+      ["Minotaur", p.minoEdge],
+      ["exit", p.exitEdge],
+    ];
+    for (var li = 0; li < items.length; li++) {
+      var ix = lx + li * gap;
+      ctx.fillStyle = p.muted;
+      ctx.fillText(items[li][0], ix, ly);
+      ctx.fillStyle = items[li][1];
+      ctx.fillRect(
+        ix + ctx.measureText(items[li][0]).width + 6,
+        ly - 10,
+        sw,
+        11,
+      );
+    }
+    if (probs) {
+      var hx = lx + items.length * gap;
+      ctx.fillStyle = "rgba(239,68,68,0.55)";
+      ctx.fillRect(
+        hx + ctx.measureText("minotaur forecast").width + 6,
+        ly - 10,
+        sw,
+        11,
+      );
+      ctx.fillStyle = p.muted;
+      ctx.fillText("minotaur forecast", hx, ly);
     }
   }
 
+  // ------------------------------------------------------------- maze extras
+  // action deltas (notebook convention: 0 wait,1 left,2 right,3 up,4 down)
+  var ACT_D = [
+    [0, 0],
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ];
+  var mazeAutoTimer = null;
   var heatMin = 0;
   var heatMax = 1;
+
+  /** Planned Thomas route from the current state, following the VI policy. */
+  function mazePolicyPath() {
+    if (!maze.mdp || !maze.vi) return null;
+    var path = [];
+    var ti = maze.state[0],
+      tj = maze.state[1];
+    var mi = maze.state[2],
+      mj = maze.state[3];
+    var seen = {};
+    for (var k = 0; k < 32; k++) {
+      var key = ti + "," + tj + "," + mi + "," + mj + ",1";
+      if (seen[key]) break;
+      seen[key] = true;
+      var sid = maze.mdp.map.get(key);
+      if (sid === undefined) break;
+      var a = maze.vi.policy[sid];
+      path.push({ i: ti, j: tj, a: a });
+      if (S.MAZE[ti][tj] === 2) break;
+      var moves = S.validMoves(S.MAZE, [ti, tj], true);
+      if (moves.indexOf(a) === -1) break;
+      ti += ACT_D[a][0];
+      tj += ACT_D[a][1];
+    }
+    return path;
+  }
+
+  /**
+   * Minotaur position forecast: marginal random walk (uniform valid moves)
+   * from its current cell for `horizon` steps — the notebook's cell_probs.
+   */
+  function minoProbs(horizon) {
+    var cur = {};
+    cur[maze.state[2] + "," + maze.state[3]] = 1;
+    for (var h = 0; h < horizon; h++) {
+      var nxt = {};
+      for (var k in cur) {
+        var parts = k.split(",");
+        var mi = +parts[0],
+          mj = +parts[1];
+        if (!isFinite(mi) || !isFinite(mj)) continue;
+        var moves = S.validMoves(S.MAZE, [mi, mj], false);
+        var share = cur[k] / moves.length;
+        for (var m = 0; m < moves.length; m++) {
+          var act = moves[m];
+          var nk = mi + ACT_D[act][0] + "," + (mj + ACT_D[act][1]);
+          nxt[nk] = (nxt[nk] || 0) + share;
+        }
+      }
+      cur = nxt;
+    }
+    var max = 0;
+    for (var k2 in cur) if (cur[k2] > max) max = cur[k2];
+    if (max === 0) return null;
+    var norm = {};
+    for (var k3 in cur) norm[k3] = cur[k3] / max;
+    return norm;
+  }
+
+  /** Monte-Carlo win probability of the current policy from the current state. */
+  function mazeWinProb() {
+    if (!maze.mdp || !maze.vi) return null;
+    var wins = 0,
+      n = 300;
+    for (var s = 0; s < n; s++) {
+      var st = maze.state.slice();
+      for (var k = 0; k < 40; k++) {
+        var sid = maze.mdp.map.get(st.join(","));
+        if (sid === undefined) break;
+        var a = maze.vi.policy[sid];
+        var res = S.mazeStep(st, a);
+        st = res.state;
+        if (res.done) {
+          if (res.won) wins++;
+          break;
+        }
+      }
+    }
+    return wins / n;
+  }
+
+  function mazeAutoStart() {
+    if (mazeAutoTimer) return;
+    $id("btn-auto").textContent = "⏸ Stop auto";
+    mazeAutoTimer = setInterval(function () {
+      if (maze.over || tab !== "maze" || maze.mode !== "play") {
+        mazeAutoStop();
+        return;
+      }
+      var a = mazeBestAction();
+      if (a === null) {
+        mazeAutoStop();
+        return;
+      }
+      mazeAct(a);
+    }, 650);
+  }
+
+  function mazeAutoStop() {
+    if (mazeAutoTimer) {
+      clearInterval(mazeAutoTimer);
+      mazeAutoTimer = null;
+    }
+    var b = $id("btn-auto");
+    if (b) b.textContent = "🤖 Auto";
+  }
 
   function viSliceHeat() {
     var mdp = maze.mdp;
@@ -767,6 +978,7 @@
     if (e.code === "Space") {
       e.preventDefault();
       if (tab === "maze" && maze.mode === "play" && !maze.over) {
+        mazeAutoStop();
         mazeAct(0);
         markKey("Space — wait");
       }
@@ -774,8 +986,11 @@
     }
     if (tab === "maze" && keyMap[e.code]) {
       e.preventDefault();
-      mazeAct(keyMap[e.code]);
-      markKey(e.code.replace("Key", "").replace("Arrow", "") + " — move");
+      if (maze.mode === "play" && !maze.over) {
+        mazeAutoStop();
+        mazeAct(keyMap[e.code]);
+        markKey("wasd/arrows — move");
+      }
       return;
     }
     if (tab === "car") {
@@ -869,6 +1084,20 @@
       $id("hud-status").textContent = "Playing";
       render();
     });
+    $id("mode-play").addEventListener("click", function () {
+      maze.mode = "play";
+      $id("mode-play").classList.add("active");
+      $id("mode-vi").classList.remove("active");
+      $id("vi-options").classList.add("hidden");
+      $id("play-options").classList.remove("hidden");
+      if (!maze.vi) {
+        runVI();
+        var wp1 = mazeWinProb();
+        if (wp1 !== null)
+          $id("hud-winprob").textContent = Math.round(wp1 * 100) + "%";
+      }
+      render();
+    });
     $id("mode-vi").addEventListener("click", function () {
       maze.mode = "vi";
       $id("mode-vi").classList.add("active");
@@ -887,6 +1116,13 @@
         animateVI();
       }
     });
+    var autoBtn = $id("btn-auto");
+    if (autoBtn) {
+      autoBtn.addEventListener("click", function () {
+        if (mazeAutoTimer) mazeAutoStop();
+        else mazeAutoStart();
+      });
+    }
     $id("vi-gamma").addEventListener("input", function () {
       maze.viGamma = Number(this.value);
       $id("vi-gamma-v").textContent = this.value;
@@ -1004,6 +1240,10 @@
     sizeCanvas();
     mazeStart();
     maze.mdp = S.buildMazeMdp();
+    runVI();
+    var wpInit = mazeWinProb();
+    if (wpInit !== null)
+      $id("hud-winprob").textContent = Math.round(wpInit * 100) + "%";
     log("🐂 Minotaur Maze loaded — arrows to move, reach the gold exit.");
     log("🧮 Value Iteration mode solves the full joint MDP (2240 states).");
     log("⛰️ Mountain Car tab: SARSA(λ) with Fourier features trains live.");

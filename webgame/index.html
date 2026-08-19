@@ -91,6 +91,9 @@
             <div class="hud-row">
               <span>Losses</span><b id="hud-losses">0</b>
             </div>
+            <div class="hud-row">
+              <span>Win prob</span><b id="hud-winprob">—</b>
+            </div>
           </div>
           <div id="car-hud" class="hud hidden">
             <div class="hud-row">
@@ -116,6 +119,7 @@
             <button class="btn mode-btn" id="mode-vi">
               🧮 Value Iteration
             </button>
+            <button class="btn" id="btn-auto">🤖 Auto</button>
           </div>
           <div id="vi-options" class="hidden">
             <label class="slider-row"
@@ -248,10 +252,14 @@
         </ul>
         <h3>🐂 Minotaur Maze — Play</h3>
         <p>
-          Move Thomas with the arrow keys (wait with <b>Space</b>). The minotaur
-          takes a uniform random legal move after yours. Reach the
-          <b>gold exit</b> to win; if the minotaur lands on you, you lose.
-          <b>Wins/Losses</b> are tallied in the sidebar.
+          Move <b>Thomas</b> with the arrow keys (wait with <b>Space</b>). The
+          minotaur takes a uniform random legal move after yours. Reach the
+          <b>green exit</b> to win; if the minotaur lands on you, you lose. The
+          <b>orange arrows</b> trace the optimal route (with step numbers), the
+          <b>red heat</b> forecasts the minotaur's likely wanderings, and
+          <b>🤖 Auto</b> plays the optimal policy for you. <b>Win prob</b> is
+          the Monte-Carlo victory probability of the optimal policy from the
+          current state (the lab reports 1.0 for the fixed path).
         </p>
         <h3>🧮 Value Iteration</h3>
         <p>
@@ -286,6 +294,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
     <script src="js/minichart.js?v=2"></script>
+    <script src="js/sprites.js?v=1"></script>
     <script src="js/rl1-core.js?v=1"></script>
     <script src="js/main.js?v=1"></script>
   </body>

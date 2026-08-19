@@ -267,7 +267,9 @@
   // =====================================================================
 
   function mountainCarTrack(x) {
-    return 0.55 * Math.sin(3 * x) + 0.35 * Math.sin(5 * x);
+    // the TRUE hill potential: the dynamics use -0.0025*cos(3x) = -dV/dx,
+    // so V(x) = sin(3x) — the drawn ramp matches the physics exactly
+    return Math.sin(3 * x);
   }
 
   function createMountainCar(seed) {
@@ -281,12 +283,13 @@
   }
 
   function mcStep(env, action) {
-    // action: 0 push left, 1 no-op, 2 push right
+    // action: 0 push left, 1 no-op, 2 push right — gym MountainCar-v0 exact:
+    //   x += v ; v += 0.0015*a - 0.0025*cos(3x) ; clip v ; goal at x >= 0.5
     var a = action - 1;
-    env.v += a * 0.001 + Math.cos(3 * env.x) * -0.0025;
+    env.x += env.v;
+    env.v += a * 0.0015 - 0.0025 * Math.cos(3 * env.x);
     if (env.v > 0.07) env.v = 0.07;
     if (env.v < -0.07) env.v = -0.07;
-    env.x += env.v;
     if (env.x < -1.2) {
       env.x = -1.2;
       env.v = 0;
