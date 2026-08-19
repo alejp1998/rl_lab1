@@ -237,6 +237,25 @@
         </div>
 
         <section class="guide-panel" data-tab="theory">
+          <h3>💡 The big idea in plain words</h3>
+          <p>
+            <b>Maze:</b> imagine every game position glowing with a number —
+            "how good is it to be here?" — where the exit glows +500 and being
+            caught glows −1000. Value iteration spreads that glow through the
+            maze like water finding its level: each position learns "my best
+            move's promise, minus the cost of moving", over and over, until
+            nothing changes. Then the arrows simply point to the brightest
+            neighbour.
+          </p>
+          <p>
+            <b>Mountain car:</b> the car is too weak to climb straight up — it
+            must slingshot back and forth. SARSA learns from its own experience:
+            after every step it nudges its beliefs toward "what actually
+            happened + what the next situation promises". The Fourier basis is a
+            set of smooth wave patterns; the car's "brain" is a weighted mix of
+            them, and <b>λ</b> is a memory dial — how much a past decision
+            shares the credit (or blame) for what happens now.
+          </p>
           <h3>🎓 The Lab</h3>
           <p>
             <b>Reinforcement Learning Lab 1</b> (KTH/UPM, 2021) solves two
