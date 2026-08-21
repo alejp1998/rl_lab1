@@ -145,13 +145,12 @@
   function mazeAct(a) {
     if (maze.mode !== "play" || maze.over) return;
     maze.last = S.ACT_NAMES[a];
-    mazeHist.push({
-      ti: maze.state[0],
-      tj: maze.state[1],
-      mi: maze.state[2],
-      mj: maze.state[3],
-    });
-    var res = S.mazeStep(maze.state, a);
+    var res = S.mazeStep(
+      maze.state,
+      a,
+      maze.vi ? maze.vi.V : null,
+      maze.mdp ? maze.mdp.map : null,
+    );
     maze.state = res.state;
     maze.steps++;
     $id("hud-steps").textContent = String(maze.steps);
@@ -195,6 +194,9 @@
         Math.round(Math.max.apply(null, maze.vi.V)),
     );
     $id("hud-status").textContent = "VI done";
+    var wp = mazeWinProb();
+    if (wp !== null)
+      $id("hud-winprob").textContent = Math.round(wp * 100) + "%";
     render();
   }
 
@@ -437,7 +439,9 @@
     // planned policy path (play) — notebook animate_solution style
     var path = null;
     if (maze.mode === "play" && maze.mdp && maze.vi) {
-      path = mazePolicyPath();
+      var _ck = maze.state.join(",");
+      if (!(_ck in mazePathCache)) mazePathCache[_ck] = mazePolicyPath();
+      path = mazePathCache[_ck];
     }
 
     var mi = maze.state[2],
@@ -554,77 +558,42 @@
       ctx.font = "700 " + Math.max(10, cw * 0.26) + "px system-ui";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
+      ctx.lineWidth = Math.max(3, cw * 0.1);
+      ctx.strokeStyle = "rgba(255,255,255,0.92)";
+      ctx.strokeText(String(num), cx + dx / 2, cy + dy / 2 - cw * 0.02);
+      ctx.fillStyle = "#0f172a";
       ctx.fillText(String(num), cx + dx / 2, cy + dy / 2 - cw * 0.02);
     }
 
-    // executed moves — the notebook's recorded simulation: orange for Thomas,
-    // red for the minotaur, each numbered with its step
-    if (mazeHist && mazeHist.length > 1) {
-      for (var h = 0; h < mazeHist.length - 1; h++) {
-        var h0 = mazeHist[h],
-          h1 = mazeHist[h + 1];
-        if (h0.ti !== h1.ti || h0.tj !== h1.tj)
-          nbArrow(
-            ox + (h0.tj + 0.5) * cw,
-            oy + (h0.ti + 0.5) * cw,
-            h1.tj - h0.tj,
-            h1.ti - h0.ti,
-            h,
-            "#f97316",
-          );
-        if (h0.mi !== h1.mi || h0.mj !== h1.mj)
-          nbArrow(
-            ox + (h0.mj + 0.5) * cw,
-            oy + (h0.mi + 0.5) * cw,
-            h1.mj - h0.mj,
-            h1.mi - h0.mi,
-            h,
-            "#ef4444",
-          );
-      }
-    }
-
-    // planned joint route — the VI policy's future, notebook-style: orange
-    // Thomas moves, red minotaur moves, numbers continuing from the history
-    var hb = mazeHist.length > 1 ? mazeHist.length - 1 : 0;
+    // planned joint route — the VI policy's FUTURE, notebook-style: orange
+    // Thomas moves, red minotaur moves, numbers continuing from the executed
+    // steps; re-simulated per state (cached), so it updates as we move
     if (path && path.length > 1) {
-      for (var k = 0; k < path.length - 1; k++) {
-        var a0 = path[k],
-          a1 = path[k + 1];
-        if (a0.i !== a1.i || a0.j !== a1.j)
+      for (var pk = 0; pk < path.length - 1; pk++) {
+        var a0 = path[pk],
+          a1 = path[pk + 1];
+        if (a0.i !== a1.i || a0.j !== a1.j) {
           nbArrow(
             ox + (a0.j + 0.5) * cw,
             oy + (a0.i + 0.5) * cw,
             a1.j - a0.j,
             a1.i - a0.i,
-            hb + k,
+            maze.steps + pk,
             "#f97316",
           );
-        if (a0.mi !== a1.mi || a0.mj !== a1.mj)
+        }
+        if (a0.mi !== a1.mi || a0.mj !== a1.mj) {
           nbArrow(
             ox + (a0.mj + 0.5) * cw,
             oy + (a0.mi + 0.5) * cw,
             a1.mj - a0.mj,
             a1.mi - a0.mi,
-            hb + k,
+            maze.steps + pk,
             "#ef4444",
           );
+        }
       }
     }
-
-    // character sprites
-    Sprites.drawMinotaur(
-      ctx,
-      ox + (mj + 0.5) * cw,
-      oy + (mi + 0.5) * cw,
-      cw * 0.72,
-    );
-    Sprites.drawThomas(
-      ctx,
-      ox + (tj + 0.5) * cw,
-      oy + (ti + 0.5) * cw,
-      cw * 0.7,
-    );
 
     // AI suggestion arrow (play mode, manual) — notebook geometry
     if (maze.mode === "play" && !maze.over && !mazeAutoTimer) {
@@ -635,7 +604,7 @@
           oy + (ti + 0.5) * cw,
           ACT_D[best][1],
           ACT_D[best][0],
-          hb,
+          maze.steps,
           "#f97316",
         );
       }
@@ -724,7 +693,12 @@
       var a = maze.vi.policy[sid];
       path.push({ i: st[0], j: st[1], mi: st[2], mj: st[3], a: a });
       if (S.MAZE[st[0]][st[1]] === 2) break;
-      var res = S.mazeStep(st, a);
+      var res = S.mazeStep(
+        st,
+        a,
+        maze.vi ? maze.vi.V : null,
+        maze.mdp ? maze.mdp.map : null,
+      );
       st = res.state;
       if (res.done) break;
     }
@@ -775,7 +749,12 @@
         var sid = maze.mdp.map.get(st.join(","));
         if (sid === undefined) break;
         var a = maze.vi.policy[sid];
-        var res = S.mazeStep(st, a);
+        var res = S.mazeStep(
+          st,
+          a,
+          maze.vi ? maze.vi.V : null,
+          maze.mdp ? maze.mdp.map : null,
+        );
         st = res.state;
         if (res.done) {
           if (res.won) wins++;
@@ -1175,6 +1154,7 @@
         stopVI();
         log("⏸ VI paused.");
       } else {
+        if (!maze.vi) runVI(); // a rule change invalidated the solution
         animateVI();
       }
     });
@@ -1192,6 +1172,19 @@
     $id("vi-speed").addEventListener("input", function () {
       maze.viSpeed = Number(this.value);
       $id("vi-speed-v").textContent = this.value + " sweeps/s";
+    });
+    $id("mino-rule").addEventListener("change", function () {
+      S.setMinoRule(this.value);
+      maze.mdp = S.buildMazeMdp();
+      maze.vi = null;
+      mazePathCache = {};
+      $id("hud-status").textContent = "MDP rebuilt — run VI";
+      log(
+        "🐂 Minotaur rule: " +
+          this.options[this.selectedIndex].text +
+          " — MDP rebuilt, run VI to re-solve.",
+      );
+      render();
     });
 
     // car modes

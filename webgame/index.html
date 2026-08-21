@@ -201,6 +201,15 @@
                 value="12"
               /><b id="vi-speed-v">12 sweeps/s</b></label
             >
+            <label class="slider-row"
+              >🐂 Minotaur rule
+              <select id="mino-rule" class="btn" style="flex: 1">
+                <option value="random">🎲 Random (lab default)</option>
+                <option value="chase">🎯 Chases Thomas</option>
+                <option value="smart">🧠 Smart (adversarial)</option>
+                <option value="static">🧊 Static (never moves)</option>
+              </select></label
+            >
             <button class="btn" id="btn-vi-run">▶ Run VI</button>
           </div>
           <div id="play-options">
@@ -334,17 +343,24 @@
           <p>
             where \((t_i,t_j)\) is Thomas's cell and \((m_i,m_j)\) the
             minotaur's. Thomas chooses one of five actions (wait, left, right,
-            up, down); the minotaur then takes a
-            <b>uniformly random legal move</b>. With no key required, the lab's
+            up, down); the minotaur then moves according to the selected
+            <b>rule</b>: <b>Random</b> (a uniform legal move — the lab's
+            default), <b>Chase</b> (a greedy step toward Thomas),
+            <b>Smart</b> (adversarial — it always steps to the cell that
+            minimises Thomas's value) or <b>Static</b> (it never moves). The
             transition model is
           </p>
           <p class="math">
-            \[ P(s' \mid s, a) = \frac{1}{|A_{\text{mino}}(s)|} \]
+            \[ P(s' \mid s, a) = \sum_{m' \in A_{\text{mino}}(s)} \pi(m' \mid
+            s)\, \mathbb{1}_{s' = (t', m')} \]
           </p>
           <p>
-            with rewards \(+500\) for reaching the exit, \(-1000\) if the
-            minotaur catches Thomas, and \(-1\) per step. The optimal value
-            function satisfies the <b>Bellman optimality equation</b>
+            with \(\pi\) the minotaur's move distribution under the chosen rule
+            (uniform for Random, concentrated on the distance-minimising moves
+            for Chase, the identity for Static), rewards \(+500\) for reaching
+            the exit, \(-1000\) if the minotaur catches Thomas, and \(-1\) per
+            step. The optimal value function satisfies the
+            <b>Bellman optimality equation</b>
           </p>
           <p class="math">
             \[ V^*(s) = \max_{a \in \mathcal{A}} \sum_{s'} P(s' \mid s,
@@ -356,8 +372,18 @@
             [R + \gamma V_k(s')]\). The optimal policy is greedy w.r.t. the
             converged values. The <b>Win prob</b> readout is the Monte-Carlo
             estimate of the victory probability of the optimal policy from the
-            current state — the lab's fixed-path analysis reports exactly
-            \(P_{\text{vict}} = 1.0\).
+            current state. <b>Why 100% with the random minotaur?</b> The maze is
+            always winnable against a random-walking minotaur — there is a
+            policy (wait for it to wander off the exit, then sprint) that wins
+            with probability 1, so \(P_{\text{vict}} = 1.0\), exactly the lab's
+            fixed-path analysis. Switch the rule to <b>Chase</b> and the win
+            probability can drop when the minotaur corners Thomas (a greedy
+            chaser is still predictable — an optimal planner can kite it, which
+            is why the start state stays at 100%). <b>Smart</b> is the true
+            adversary: the minotaur always moves to the cell that minimises your
+            value function (a minimax game), so the VI plans against the worst
+            case and the win probability is genuinely below 100%.
+            <b>Static</b> keeps the minotaur in place — a trivial 100%.
           </p>
 
           <h3>⛰️ Mountain Car — SARSA(λ) with Fourier basis</h3>
@@ -436,7 +462,7 @@
     <script src="js/minichart.js?v=3"></script>
     <script src="js/sprites.js?v=3"></script>
     <script src="js/guide.js?v=3"></script>
-    <script src="js/rl1-core.js?v=3"></script>
-    <script src="js/main.js?v=5"></script>
+    <script src="js/rl1-core.js?v=4"></script>
+    <script src="js/main.js?v=6"></script>
   </body>
 </html>

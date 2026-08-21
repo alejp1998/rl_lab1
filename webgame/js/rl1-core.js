@@ -52,6 +52,74 @@
     return moves;
   }
 
+  /** Minotaur movement rule — the lab lets you pick how the minotaur moves:
+   *  "random" (uniform over the valid moves, the lab default), "chase"
+   *  (greedy — always takes a step toward Thomas), "static" (never moves).
+   *  The MDP transitions, the rewards and the play dynamics ALL use it, so
+   *  the VI's win probability reflects the rule. */
+  var minoRule = "random";
+
+  function minoMoveProbs(mi, mj, ti, tj, V, map) {
+    var acts = validMoves(MAZE, [mi, mj], false);
+    if (minoRule === "static" || acts.length === 0) {
+      return { actions: [0], probs: [1] }; // stays put (action 0 = no move)
+    }
+    if (minoRule === "smart") {
+      // adversarial: may also HOLD POSITION (a real adversary guards the
+      // exit); with values it picks the LOWEST-V option deterministically,
+      // without values (MDP construction) it spreads uniformly over them
+      var opts = acts.concat([0]); // 0 = stay
+      if (V && map) {
+        var worst = opts[0],
+          wv = Infinity;
+        for (var ai = 0; ai < opts.length; ai++) {
+          var nmi = mi + ACTIONS[opts[ai]][0],
+            nmj = mj + ACTIONS[opts[ai]][1];
+          var sid = map.get(ti + "," + tj + "," + nmi + "," + nmj + ",1");
+          var v = sid === undefined ? 0 : V[sid];
+          if (v < wv) {
+            wv = v;
+            worst = opts[ai];
+          }
+        }
+        return { actions: [worst], probs: [1] };
+      }
+      var pu = 1 / opts.length;
+      return {
+        actions: opts,
+        probs: opts.map(function () {
+          return pu;
+        }),
+      };
+    }
+    if (minoRule === "chase") {
+      var ds = acts.map(function (a) {
+        return (
+          Math.abs(mi + ACTIONS[a][0] - ti) + Math.abs(mj + ACTIONS[a][1] - tj)
+        );
+      });
+      var dmin = Math.min.apply(null, ds);
+      var p =
+        1 /
+        ds.filter(function (d) {
+          return d === dmin;
+        }).length;
+      return {
+        actions: acts,
+        probs: acts.map(function (_, k) {
+          return ds[k] === dmin ? p : 0;
+        }),
+      };
+    }
+    var pu = 1 / acts.length;
+    return {
+      actions: acts,
+      probs: acts.map(function () {
+        return pu;
+      }),
+    };
+  }
+
   /**
    * Builds the full joint MDP: states (thomas, minotaur, key), transitions,
    * rewards — mirroring the lab's MinotaurMaze (key_needed=false so key=1).
@@ -88,7 +156,8 @@
         var mc = allCells[im];
         var key = 1;
         var sub;
-        if (MAZE[tc[0]][tc[1]] === 2 && !(tc[0] === mc[0] && tc[1] === mc[1])) sub = 1;
+        if (MAZE[tc[0]][tc[1]] === 2 && !(tc[0] === mc[0] && tc[1] === mc[1]))
+          sub = 1;
         else if (tc[0] === mc[0] && tc[1] === mc[1]) sub = -1;
         else sub = 0;
         states.push([tc[0], tc[1], mc[0], mc[1], key]);
@@ -113,7 +182,10 @@
 
     for (var si = 0; si < nStates; si++) {
       var st = states[si];
-      var ti = st[0], tj = st[1], mi = st[2], mj = st[3];
+      var ti = st[0],
+        tj = st[1],
+        mi = st[2],
+        mj = st[3];
       var terminal = subset[si] === -1 || subset[si] === 1;
       var thomasActs = actsThomas[ti + "," + tj];
 
@@ -129,11 +201,12 @@
         }
         var nti = ti + ACTIONS[a][0];
         var ntj = tj + ACTIONS[a][1];
-        var minoActs = actsMino[mi + "," + mj];
         R[si][a] = REW.step;
-        for (var ma = 0; ma < minoActs.length; ma++) {
-          var nmi = mi + ACTIONS[minoActs[ma]][0];
-          var nmj = mj + ACTIONS[minoActs[ma]][1];
+        var mm = minoMoveProbs(mi, mj, nti, ntj);
+        for (var ma = 0; ma < mm.actions.length; ma++) {
+          if (mm.probs[ma] <= 0) continue;
+          var nmi = mi + ACTIONS[mm.actions[ma]][0];
+          var nmj = mj + ACTIONS[mm.actions[ma]][1];
           var ns = map.get(nti + "," + ntj + "," + nmi + "," + nmj + ",1");
           if (subset[ns] === -1) R[si][a] = REW.loss;
           else if (subset[ns] === 1) R[si][a] = REW.victory;
@@ -149,13 +222,13 @@
         if (thomasActs.indexOf(a2) === -1) continue;
         var nti2 = ti + ACTIONS[a2][0];
         var ntj2 = tj + ACTIONS[a2][1];
-        var minoActs2 = actsMino[mi + "," + mj];
-        var pv = 1 / minoActs2.length;
-        for (var ma2 = 0; ma2 < minoActs2.length; ma2++) {
-          var nmi2 = mi + ACTIONS[minoActs2[ma2]][0];
-          var nmj2 = mj + ACTIONS[minoActs2[ma2]][1];
+        var mm = minoMoveProbs(mi, mj, nti2, ntj2);
+        for (var ma2 = 0; ma2 < mm.actions.length; ma2++) {
+          if (mm.probs[ma2] <= 0) continue;
+          var nmi2 = mi + ACTIONS[mm.actions[ma2]][0];
+          var nmj2 = mj + ACTIONS[mm.actions[ma2]][1];
           var ns2 = map.get(nti2 + "," + ntj2 + "," + nmi2 + "," + nmj2 + ",1");
-          P[ns2][si][a2] = pv;
+          P[ns2][si][a2] += mm.probs[ma2];
         }
       }
     }
@@ -185,6 +258,7 @@
     var n = 0;
     var sweeps = [];
 
+    var smart = minoRule === "smart";
     function bellman() {
       for (var s = 0; s < nStates; s++) {
         for (var a = 0; a < nActions; a++) {
@@ -193,12 +267,22 @@
             Q[s][a] = acc;
             continue;
           }
-          var dot = 0;
-          for (var ns = 0; ns < nStates; ns++) {
-            var p = mdp.P[ns][s][a];
-            if (p !== 0) dot += p * V[ns];
+          if (smart) {
+            // adversarial minotaur: it picks the WORST reachable next state
+            var worst = Infinity;
+            for (var ns = 0; ns < nStates; ns++) {
+              var p = mdp.P[ns][s][a];
+              if (p !== 0 && V[ns] < worst) worst = V[ns];
+            }
+            Q[s][a] = acc + gamma * (worst === Infinity ? 0 : worst);
+          } else {
+            var dot = 0;
+            for (var ns2 = 0; ns2 < nStates; ns2++) {
+              var p2 = mdp.P[ns2][s][a];
+              if (p2 !== 0) dot += p2 * V[ns2];
+            }
+            Q[s][a] = acc + gamma * dot;
           }
-          Q[s][a] = acc + gamma * dot;
         }
         BV[s] = Math.max.apply(null, Q[s]);
       }
@@ -235,21 +319,34 @@
   }
 
   /** Stochastic step: Thomas takes `a`, minotaur moves uniformly at random. */
-  function mazeStep(state, a) {
-    var ti = state[0], tj = state[1], mi = state[2], mj = state[3];
+  function mazeStep(state, a, V, map) {
+    var ti = state[0],
+      tj = state[1],
+      mi = state[2],
+      mj = state[3];
     var sub = 0;
     if (MAZE[ti][tj] === 2 && !(ti === mi && tj === mj)) sub = 1;
     else if (ti === mi && tj === mj) sub = -1;
     if (sub !== 0) return { state: state, done: true, won: sub === 1 };
 
     var thomasActs = validMoves(MAZE, [ti, tj], true);
-    var nti = ti, ntj = tj;
+    var nti = ti,
+      ntj = tj;
     if (thomasActs.indexOf(a) !== -1) {
       nti = ti + ACTIONS[a][0];
       ntj = tj + ACTIONS[a][1];
     }
-    var minoActs = validMoves(MAZE, [mi, mj], false);
-    var ma = minoActs[Math.floor(Math.random() * minoActs.length)];
+    var mm = minoMoveProbs(mi, mj, nti, ntj);
+    var roll = Math.random(),
+      acc = 0,
+      ma = mm.actions[mm.actions.length - 1];
+    for (var k = 0; k < mm.actions.length; k++) {
+      acc += mm.probs[k];
+      if (roll <= acc) {
+        ma = mm.actions[k];
+        break;
+      }
+    }
     var nmi = mi + ACTIONS[ma][0];
     var nmj = mj + ACTIONS[ma][1];
 
@@ -323,7 +420,16 @@
    * SARSA(lambda) with Fourier linear approximation (lab's algorithm).
    * Returns { rewards, w } — rewards per episode.
    */
-  function sarsaLambda(order, gamma, lambda, alpha, epsilon, nEpisodes, maxIters, seed) {
+  function sarsaLambda(
+    order,
+    gamma,
+    lambda,
+    alpha,
+    epsilon,
+    nEpisodes,
+    maxIters,
+    seed,
+  ) {
     var etas = fourierEtas(order);
     var nA = 3;
     var w = new Array(etas.length + 1);
@@ -349,7 +455,10 @@
 
     for (var e = 0; e < nEpisodes; e++) {
       var env = createMountainCar(seed + e);
-      var s = [(env.x - low[0]) / (high[0] - low[0]), (env.v - low[1]) / (high[1] - low[1])];
+      var s = [
+        (env.x - low[0]) / (high[0] - low[0]),
+        (env.v - low[1]) / (high[1] - low[1]),
+      ];
       var a = choose(s, epsilon);
       var z = new Array(etas.length + 1);
       for (var zi = 0; zi < z.length; zi++) z[zi] = new Array(nA).fill(0);
@@ -405,6 +514,12 @@
     buildMazeMdp: buildMazeMdp,
     valueIteration: valueIteration,
     mazeStep: mazeStep,
+    setMinoRule: function (r) {
+      minoRule = r;
+    },
+    getMinoRule: function () {
+      return minoRule;
+    },
     mountainCarTrack: mountainCarTrack,
     createMountainCar: createMountainCar,
     mcStep: mcStep,
