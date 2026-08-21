@@ -135,6 +135,8 @@
     maze.steps = 0;
     maze.over = false;
     maze.won = false;
+    mazeHist.length = 0;
+    mazePathCache = {};
     clearResult();
     $id("hud-status").textContent = "Playing";
     $id("hud-steps").textContent = "0";
@@ -143,6 +145,12 @@
   function mazeAct(a) {
     if (maze.mode !== "play" || maze.over) return;
     maze.last = S.ACT_NAMES[a];
+    mazeHist.push({
+      ti: maze.state[0],
+      tj: maze.state[1],
+      mi: maze.state[2],
+      mj: maze.state[3],
+    });
     var res = S.mazeStep(maze.state, a);
     maze.state = res.state;
     maze.steps++;
@@ -515,52 +523,92 @@
       }
     }
 
-    // notebook-style path arrows with step numbers (play mode)
+    // notebook-style arrows (minoutaur_maze.py compute_arrow): from the cell
+    // CENTRE toward the shared edge (0.4 cell), step number at the midpoint
+    function nbArrow(cx, cy, dj, di, num, color) {
+      var dx = dj * cw * 0.4,
+        dy = di * cw * 0.4;
+      var ex = cx + dx,
+        ey = cy + dy;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(2, cw * 0.05);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      var ang = Math.atan2(dy, dx);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(
+        ex - cw * 0.16 * Math.cos(ang - 0.45),
+        ey - cw * 0.16 * Math.sin(ang - 0.45),
+      );
+      ctx.lineTo(
+        ex - cw * 0.16 * Math.cos(ang + 0.45),
+        ey - cw * 0.16 * Math.sin(ang + 0.45),
+      );
+      ctx.closePath();
+      ctx.fill();
+      ctx.font = "700 " + Math.max(10, cw * 0.26) + "px system-ui";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(num), cx + dx / 2, cy + dy / 2 - cw * 0.02);
+    }
+
+    // executed moves — the notebook's recorded simulation: orange for Thomas,
+    // red for the minotaur, each numbered with its step
+    if (mazeHist && mazeHist.length > 1) {
+      for (var h = 0; h < mazeHist.length - 1; h++) {
+        var h0 = mazeHist[h],
+          h1 = mazeHist[h + 1];
+        if (h0.ti !== h1.ti || h0.tj !== h1.tj)
+          nbArrow(
+            ox + (h0.tj + 0.5) * cw,
+            oy + (h0.ti + 0.5) * cw,
+            h1.tj - h0.tj,
+            h1.ti - h0.ti,
+            h,
+            "#f97316",
+          );
+        if (h0.mi !== h1.mi || h0.mj !== h1.mj)
+          nbArrow(
+            ox + (h0.mj + 0.5) * cw,
+            oy + (h0.mi + 0.5) * cw,
+            h1.mj - h0.mj,
+            h1.mi - h0.mi,
+            h,
+            "#ef4444",
+          );
+      }
+    }
+
+    // planned joint route — the VI policy's future, notebook-style: orange
+    // Thomas moves, red minotaur moves, numbers continuing from the history
+    var hb = mazeHist.length > 1 ? mazeHist.length - 1 : 0;
     if (path && path.length > 1) {
       for (var k = 0; k < path.length - 1; k++) {
         var a0 = path[k],
           a1 = path[k + 1];
-        if (a0.i === a1.i && a0.j === a1.j) continue;
-        var x0 = ox + (a0.j + 0.5) * cw,
-          y0 = oy + (a0.i + 0.5) * cw;
-        var x1 = ox + (a1.j + 0.5) * cw,
-          y1 = oy + (a1.i + 0.5) * cw;
-        var dx = x1 - x0,
-          dy = y1 - y0;
-        var len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 1e-6) continue;
-        var ex = (dx / len) * cw * 0.4,
-          ey = (dy / len) * cw * 0.4;
-        ctx.strokeStyle = "#f97316";
-        ctx.lineWidth = Math.max(2, cw * 0.05);
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x1 - ex, y1 - ey);
-        ctx.stroke();
-        var ang = Math.atan2(dy, dx);
-        ctx.beginPath();
-        ctx.moveTo(x1 - ex, y1 - ey);
-        ctx.lineTo(
-          x1 - ex - cw * 0.16 * Math.cos(ang - 0.45),
-          y1 - ey - cw * 0.16 * Math.sin(ang - 0.45),
-        );
-        ctx.lineTo(
-          x1 - ex - cw * 0.16 * Math.cos(ang + 0.45),
-          y1 - ey - cw * 0.16 * Math.sin(ang + 0.45),
-        );
-        ctx.closePath();
-        ctx.fillStyle = "#f97316";
-        ctx.fill();
-        ctx.fillStyle = "#f97316";
-        ctx.font = "700 " + Math.max(10, cw * 0.28) + "px system-ui";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(
-          String(k + 1),
-          (x0 + x1) / 2 + cw * 0.08,
-          (y0 + y1) / 2 - cw * 0.08,
-        );
+        if (a0.i !== a1.i || a0.j !== a1.j)
+          nbArrow(
+            ox + (a0.j + 0.5) * cw,
+            oy + (a0.i + 0.5) * cw,
+            a1.j - a0.j,
+            a1.i - a0.i,
+            hb + k,
+            "#f97316",
+          );
+        if (a0.mi !== a1.mi || a0.mj !== a1.mj)
+          nbArrow(
+            ox + (a0.mj + 0.5) * cw,
+            oy + (a0.mi + 0.5) * cw,
+            a1.mj - a0.mj,
+            a1.mi - a0.mi,
+            hb + k,
+            "#ef4444",
+          );
       }
     }
 
@@ -578,26 +626,18 @@
       cw * 0.7,
     );
 
-    // AI suggestion arrow (play mode, manual)
+    // AI suggestion arrow (play mode, manual) — notebook geometry
     if (maze.mode === "play" && !maze.over && !mazeAutoTimer) {
       var best = mazeBestAction();
       if (best !== null && best !== 0) {
-        var bx = ox + (tj + 0.5) * cw;
-        var by = oy + (ti + 0.5) * cw;
-        var dang = Math.atan2(ACT_D[best][0], ACT_D[best][1]);
-        ctx.strokeStyle = "#f97316";
-        ctx.lineWidth = Math.max(2, cw * 0.06);
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(
-          bx + ACT_D[best][1] * cw * 0.55,
-          by + ACT_D[best][0] * cw * 0.55,
+        nbArrow(
+          ox + (tj + 0.5) * cw,
+          oy + (ti + 0.5) * cw,
+          ACT_D[best][1],
+          ACT_D[best][0],
+          hb,
+          "#f97316",
         );
-        ctx.lineTo(
-          bx + ACT_D[best][1] * cw * 0.9,
-          by + ACT_D[best][0] * cw * 0.9,
-        );
-        ctx.stroke();
       }
     }
 
@@ -651,32 +691,44 @@
     [1, 0],
   ];
   var mazeAutoTimer = null;
+  var mazeHist = []; // executed (Thomas, minotaur) states per step
   var heatMin = 0;
   var heatMax = 1;
 
-  /** Planned Thomas route from the current state, following the VI policy. */
+  /** Planned joint route from the current state, following the VI policy:
+   *  Thomas acts from the policy, the minotaur responds (random valid move —
+   *  the lab's dynamics, exactly the notebook's recorded simulation).
+   *  Cached per state so the plan is stable between moves. */
+  var mazePathCache = {};
   function mazePolicyPath() {
     if (!maze.mdp || !maze.vi) return null;
+    var key0 =
+      maze.state[0] +
+      "," +
+      maze.state[1] +
+      "," +
+      maze.state[2] +
+      "," +
+      maze.state[3] +
+      ",1";
+    if (mazePathCache[key0]) return mazePathCache[key0];
     var path = [];
-    var ti = maze.state[0],
-      tj = maze.state[1];
-    var mi = maze.state[2],
-      mj = maze.state[3];
+    var st = maze.state.slice();
     var seen = {};
-    for (var k = 0; k < 32; k++) {
-      var key = ti + "," + tj + "," + mi + "," + mj + ",1";
+    for (var k = 0; k < 48; k++) {
+      var key = st[0] + "," + st[1] + "," + st[2] + "," + st[3] + ",1";
       if (seen[key]) break;
       seen[key] = true;
       var sid = maze.mdp.map.get(key);
       if (sid === undefined) break;
       var a = maze.vi.policy[sid];
-      path.push({ i: ti, j: tj, a: a });
-      if (S.MAZE[ti][tj] === 2) break;
-      var moves = S.validMoves(S.MAZE, [ti, tj], true);
-      if (moves.indexOf(a) === -1) break;
-      ti += ACT_D[a][0];
-      tj += ACT_D[a][1];
+      path.push({ i: st[0], j: st[1], mi: st[2], mj: st[3], a: a });
+      if (S.MAZE[st[0]][st[1]] === 2) break;
+      var res = S.mazeStep(st, a);
+      st = res.state;
+      if (res.done) break;
     }
+    mazePathCache[key0] = path;
     return path;
   }
 
