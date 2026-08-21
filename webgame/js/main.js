@@ -209,6 +209,10 @@
     var speed = maze.viSpeed;
     maze.viTimer = setInterval(
       function () {
+        if (!maze.vi) {
+          stopVI();
+          return;
+        }
         maze.viSweep++;
         if (maze.viSweep >= maze.vi.sweeps.length) {
           stopVI();
@@ -555,14 +559,21 @@
       );
       ctx.closePath();
       ctx.fill();
+      var nx = cx + dx / 2;
+      var ny = cy + dy / 2;
+      // perpendicular offset so the number sits BESIDE the arrow line
+      // (like the notebook), never on top of it
+      var L = Math.hypot(dx, dy) || 1;
+      nx += (-dy / L) * cw * 0.17;
+      ny += (dx / L) * cw * 0.17;
       ctx.font = "700 " + Math.max(10, cw * 0.26) + "px system-ui";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.lineWidth = Math.max(3, cw * 0.1);
       ctx.strokeStyle = "rgba(255,255,255,0.92)";
-      ctx.strokeText(String(num), cx + dx / 2, cy + dy / 2 - cw * 0.02);
+      ctx.strokeText(String(num), nx, ny);
       ctx.fillStyle = "#0f172a";
-      ctx.fillText(String(num), cx + dx / 2, cy + dy / 2 - cw * 0.02);
+      ctx.fillText(String(num), nx, ny);
     }
 
     // planned joint route — the VI policy's FUTURE, notebook-style: orange
@@ -594,6 +605,20 @@
         }
       }
     }
+
+    // character sprites
+    Sprites.drawMinotaur(
+      ctx,
+      ox + (mj + 0.5) * cw,
+      oy + (mi + 0.5) * cw,
+      cw * 0.72,
+    );
+    Sprites.drawThomas(
+      ctx,
+      ox + (tj + 0.5) * cw,
+      oy + (ti + 0.5) * cw,
+      cw * 0.7,
+    );
 
     // AI suggestion arrow (play mode, manual) — notebook geometry
     if (maze.mode === "play" && !maze.over && !mazeAutoTimer) {
@@ -1173,7 +1198,21 @@
       maze.viSpeed = Number(this.value);
       $id("vi-speed-v").textContent = this.value + " sweeps/s";
     });
+    $id("mino-wait").addEventListener("change", function () {
+      stopVI();
+      S.setMinoCanWait(this.checked);
+      maze.mdp = S.buildMazeMdp();
+      maze.vi = null;
+      mazePathCache = {};
+      log(
+        "🚶 Minotaur may wait: " +
+          (this.checked ? "ON — it can hold position" : "OFF") +
+          " — MDP rebuilt. Run VI to solve.",
+      );
+      render();
+    });
     $id("mino-rule").addEventListener("change", function () {
+      stopVI();
       S.setMinoRule(this.value);
       maze.mdp = S.buildMazeMdp();
       maze.vi = null;

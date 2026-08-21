@@ -58,9 +58,11 @@
    *  The MDP transitions, the rewards and the play dynamics ALL use it, so
    *  the VI's win probability reflects the rule. */
   var minoRule = "random";
+  var minoCanWait = false; // lab's minotaur_can_wait — tested in the notebook
 
   function minoMoveProbs(mi, mj, ti, tj, V, map) {
     var acts = validMoves(MAZE, [mi, mj], false);
+    if (minoCanWait && acts.indexOf(0) === -1) acts = acts.concat([0]);
     if (minoRule === "static" || acts.length === 0) {
       return { actions: [0], probs: [1] }; // stays put (action 0 = no move)
     }
@@ -516,6 +518,12 @@
     mazeStep: mazeStep,
     setMinoRule: function (r) {
       minoRule = r;
+    },
+    setMinoCanWait: function (v) {
+      minoCanWait = !!v;
+    },
+    getMinoCanWait: function () {
+      return minoCanWait;
     },
     getMinoRule: function () {
       return minoRule;
